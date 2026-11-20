@@ -1022,22 +1022,23 @@
         </div>
     </div>
 
-    <!-- MODAL 4: Información Arquitectura Cloud / Netlify -->
+    <!-- MODAL 4: Información Arquitectura Cloud / Firebase -->
     <div id="cloud-info-modal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-[2px] z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                     <span class="w-8 h-8 rounded-xl bg-sage-100 text-sage-700 flex items-center justify-center font-bold text-sm">☁️</span>
-                    <h3 class="text-base font-bold text-slate-900">Persistencia & Login con Google</h3>
+                    <h3 class="text-base font-bold text-slate-900">Persistencia & Firebase (Google)</h3>
                 </div>
                 <button onclick="closeCloudInfoModal()" class="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">✕</button>
             </div>
             <p class="text-xs text-slate-600 leading-relaxed">
-                Tus sesiones multi-día, tu almacén de cuadernillos, tus idiomas personalizados, tus auditorías semanales (<code class="font-mono">nota_ia</code>) y la configuración de tu alarma se sincronizan en la nube al iniciar sesión con Google. El archivo <strong>MP3</strong> permanece en este navegador.
+                Tus sesiones multi-día, tu almacén de cuadernillos, tus idiomas personalizados, tus auditorías semanales (<code class="font-mono">nota_ia</code>) y la configuración de tu alarma se sincronizan en <strong>Firebase Firestore</strong> al iniciar sesión con Google. El archivo <strong>MP3</strong> permanece en este navegador.
             </p>
             <div class="bg-sand-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-700 space-y-1.5">
                 <div class="font-semibold text-sage-800">Estado de Sincronización</div>
-                <p id="cloud-modal-status" class="text-slate-500 font-mono text-[11px]"></p>
+                <p id="cloud-modal-status" class="text-slate-500 font-mono text-[11px] break-words"></p>
+                <p id="cloud-modal-error" class="hidden text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2 font-mono text-[11px] break-words"></p>
             </div>
             <div class="flex justify-end pt-1">
                 <button onclick="closeCloudInfoModal()" class="px-4 py-2 text-xs font-semibold text-white bg-sage-600 hover:bg-sage-700 rounded-xl">Entendido</button>
@@ -3480,21 +3481,29 @@ ${JSON.stringify(payload, null, 2)}`;
             }, 3400);
         }
 
-        window.onload = function () {
+        function bootApp() {
+            if (window.appReady) return;
             loadData();
             renderCalendar();
             updateDashboard();
             window.appReady = true;
             window.dispatchEvent(new Event('app-ready'));
-        };
-    </script> 
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootApp, { once: true });
+        } else {
+            bootApp();
+        }
+    </script>
+
     <!-- ============================================================================
          LOGIN CON GOOGLE (Firebase Auth) + SINCRONIZACIÓN EN LA NUBE (Firestore)
          ============================================================================ -->
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
         import {
-            getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+            getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+            signOut, onAuthStateChanged
         } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
         import {
             getFirestore, doc, getDoc, runTransaction
@@ -3514,10 +3523,13 @@ ${JSON.stringify(payload, null, 2)}`;
         const auth = getAuth(app);
         const db = getFirestore(app);
         const googleProvider = new GoogleAuthProvider();
+        googleProvider.setCustomParameters({ prompt: 'select_account' });
 
         let currentUser = null;
         let syncTimer = null;
         let pendingSync = false;
+        let lastSyncErrorText = '';
+        let lastFocusSyncAt = 0;
 
         function mapUser(fbUser) {
             if (!fbUser) return null;
@@ -3529,10 +3541,11 @@ ${JSON.stringify(payload, null, 2)}`;
             };
         }
 
-        function setSyncStatus(state) {
+        function setSyncStatus(state, errorDetail = '') {
             const dot = document.getElementById('sync-dot');
             const label = document.getElementById('sync-label');
             const modal = document.getElementById('cloud-modal-status');
+            const modalErr = document.getElementById('cloud-modal-error');
             const map = {
                 local: ['bg-amber-400', 'Solo en este navegador'],
                 syncing: ['bg-sky-400 animate-pulse', 'Sincronizando…'],
@@ -3542,10 +3555,22 @@ ${JSON.stringify(payload, null, 2)}`;
             const [cls, text] = map[state] || map.local;
             if (dot) dot.className = 'w-2 h-2 rounded-full ' + cls;
             if (label) label.textContent = text;
+            if (state !== 'error') lastSyncErrorText = '';
+            else if (errorDetail) lastSyncErrorText = errorDetail;
+
             if (modal) {
                 modal.textContent = currentUser
-                    ? `Cuenta: ${currentUser.email || ''} · ${text}`
-                    : 'No has iniciado sesión: los datos solo están en este navegador.';
+                    ? `Cuenta: ${currentUser.email || ''} · ${text} · Dominio: ${window.location.hostname || 'local'}`
+                    : `No has iniciado sesión: los datos solo están en este navegador. Dominio: ${window.location.hostname || 'local'}`;
+            }
+            if (modalErr) {
+                if (lastSyncErrorText) {
+                    modalErr.textContent = lastSyncErrorText;
+                    modalErr.classList.remove('hidden');
+                } else {
+                    modalErr.textContent = '';
+                    modalErr.classList.add('hidden');
+                }
             }
         }
 
@@ -3587,13 +3612,45 @@ ${JSON.stringify(payload, null, 2)}`;
         function readMeta() {
             try { return JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch { return {}; }
         }
+        function safeLocalSet(key, val) {
+            try { localStorage.setItem(key, val); } catch (e) { console.warn('localStorage lleno para', key, e); }
+        }
         function remember() {
-            localStorage.setItem(META_KEY, JSON.stringify({ userId: currentUser.id, revision, acknowledgedAt }));
+            if (!currentUser) return;
+            safeLocalSet(META_KEY, JSON.stringify({ userId: currentUser.id, revision, acknowledgedAt }));
         }
         function snapshot() {
-            return JSON.parse(JSON.stringify({ updatedAt: dataUpdatedAt, entries, workbooks, languages, weeklyNotes,
-                alarmMeta: { source: alarmConfig.source } }));
+            return JSON.parse(JSON.stringify({
+                updatedAt: dataUpdatedAt || Date.now(),
+                entries,
+                workbooks,
+                languages,
+                weeklyNotes,
+                alarmMeta: {
+                    source: alarmConfig.source,
+                    mp3Name: alarmConfig.mp3Name || '',
+                    mp3Duration: alarmConfig.mp3Duration || 0
+                }
+            }));
         }
+
+        function describeFirebaseError(err) {
+            const code = err?.code || '';
+            if (code === 'auth/unauthorized-domain') {
+                return `Dominio no autorizado en Firebase (${window.location.hostname}). Agrégalo en Firebase Console → Authentication → Settings → Authorized domains.`;
+            }
+            if (code === 'permission-denied') {
+                return 'Permiso denegado en Firestore. Revisa las Reglas de Firestore para permitir acceso a userData/{userId} al usuario autenticado.';
+            }
+            if (code === 'unavailable' || code === 'failed-precondition') {
+                return 'No se pudo conectar con Firestore. Verifica tu conexión o si la base de datos Firestore fue creada en Firebase Console.';
+            }
+            if (err?.status === 409) {
+                return 'Conflicto de versión con otro dispositivo. Usa "Recuperar nube y exportar copia local" en el menú de tu cuenta.';
+            }
+            return err?.message || 'Error desconocido de sincronización.';
+        }
+
         async function api(method, body) {
             if (!currentUser) throw new Error('No autenticado');
             const ref = doc(db, 'userData', currentUser.id);
@@ -3605,8 +3662,9 @@ ${JSON.stringify(payload, null, 2)}`;
             if (method === 'PUT') {
                 return await runTransaction(db, async (tx) => {
                     const snap = await tx.get(ref);
-                    const currentRev = snap.exists() ? (snap.data().revision || 0) : 0;
-                    if (snap.exists() && currentRev !== body.baseRevision) {
+                    const currentRev = snap.exists() ? Number(snap.data().revision || 0) : 0;
+                    const expectedRev = Number(body.baseRevision || 0);
+                    if (snap.exists() && currentRev !== expectedRev) {
                         const error = new Error('Conflict');
                         error.status = 409;
                         throw error;
@@ -3618,23 +3676,26 @@ ${JSON.stringify(payload, null, 2)}`;
                 });
             }
         }
+
         function applyCloud(data) {
             entries = migrateLegacyEntriesMap(data.entries || {});
             workbooks = Array.isArray(data.workbooks) ? data.workbooks : [];
             languages = Array.isArray(data.languages) && data.languages.length ? data.languages : [...DEFAULT_LANGUAGES];
-            weeklyNotes = data.weeklyNotes || {};
-            alarmConfig.source = data.alarmMeta?.source === 'mp3' && alarmConfig.mp3DataUrl ? 'mp3' : 'digital';
+            weeklyNotes = (data.weeklyNotes && typeof data.weeklyNotes === 'object') ? data.weeklyNotes : {};
+            alarmConfig.source = (data.alarmMeta?.source === 'mp3' && alarmConfig.mp3DataUrl) ? 'mp3' : 'digital';
             saveAllToStorage(false, Number(data.updatedAt) || 0);
-            try { localStorage.setItem(STORAGE_KEYS.ALARM_CONFIG, JSON.stringify(alarmConfig)); } catch {}
+            safeLocalSet(STORAGE_KEYS.ALARM_CONFIG, JSON.stringify(alarmConfig));
             refreshLanguageSelectors();
             updateWorkbooksHeaderBadge();
             syncAlarmUIFromConfig();
             renderCalendar();
             updateDashboard();
         }
+
         async function synchronize() {
-            if (!currentUser || !navigator.onLine) {
-                if (currentUser) setSyncStatus('error');
+            if (!currentUser) return false;
+            if (!navigator.onLine) {
+                setSyncStatus('error', 'Sin conexión a internet. Tus cambios se guardan localmente y se sincronizarán al volver.');
                 return false;
             }
             if (activeSync) { pendingSync = true; return activeSync; }
@@ -3647,6 +3708,7 @@ ${JSON.stringify(payload, null, 2)}`;
                         const start = dataUpdatedAt;
                         const cloud = await api('GET');
                         if (session !== generation) return false;
+
                         const meta = readMeta();
                         const sameAccount = meta.userId === currentUser.id;
                         if (!ready) {
@@ -3654,28 +3716,35 @@ ${JSON.stringify(payload, null, 2)}`;
                             acknowledgedAt = sameAccount ? Number(meta.acknowledgedAt || 0) : 0;
                         }
                         const dirty = dataUpdatedAt > acknowledgedAt;
-                        if (!cloud.exists && meta.userId && !sameAccount) {
-                            const error = new Error('Account changed'); error.status = 409; throw error;
-                        }
+                        const cloudRev = cloud.exists ? Number(cloud.revision || 0) : 0;
+
                         if (cloud.exists && (!sameAccount || !dirty)) {
                             if (dataUpdatedAt !== start) { pendingSync = true; continue; }
-                            if (!sameAccount) {
-                                localStorage.setItem('edr_backup_' + (meta.userId || 'guest'), JSON.stringify(snapshot()));
+                            if (!sameAccount && dataUpdatedAt > 0) {
+                                safeLocalSet('edr_backup_' + (meta.userId || 'guest'), JSON.stringify(snapshot()));
                             }
                             applyCloud(cloud);
-                            revision = cloud.revision;
+                            revision = cloudRev;
                             acknowledgedAt = dataUpdatedAt;
                             ready = true;
                             remember();
                         } else {
-                            if (cloud.exists && cloud.revision !== revision) {
-                                const error = new Error('Conflict'); error.status = 409; throw error;
+                            if (cloud.exists && cloudRev !== revision) {
+                                const error = new Error('Conflict');
+                                error.status = 409;
+                                throw error;
+                            }
+                            if (!cloud.exists && meta.userId && !sameAccount) {
+                                // Respaldar cuenta anterior antes de inicializar una cuenta nueva en la nube
+                                safeLocalSet('edr_backup_' + meta.userId, JSON.stringify(snapshot()));
                             }
                             const sent = snapshot();
                             const result = await api('PUT', { ...sent, baseRevision: cloud.exists ? revision : 0 });
                             if (session !== generation) return false;
-                            revision = result.revision;
+                            revision = Number(result.revision || 1);
                             acknowledgedAt = sent.updatedAt;
+                            dataUpdatedAt = sent.updatedAt;
+                            safeLocalSet(STORAGE_KEYS.UPDATED_AT, String(dataUpdatedAt));
                             ready = true;
                             remember();
                             if (dataUpdatedAt !== sent.updatedAt) pendingSync = true;
@@ -3684,9 +3753,15 @@ ${JSON.stringify(payload, null, 2)}`;
                     setSyncStatus('synced');
                     return true;
                 } catch (error) {
+                    console.error('[Firebase Sync Error]', error);
                     if (session !== generation) return false;
-                    setSyncStatus('error');
-                    if (error.status === 409) showToast('Hay cambios en otro dispositivo. Tus cambios locales se conservan: usa Recuperar nube y exportar copia local en el menú de tu cuenta.', '⚠️');
+                    const detail = describeFirebaseError(error);
+                    setSyncStatus('error', detail);
+                    if (error?.status === 409) {
+                        showToast('Hay cambios en otro dispositivo. Usa "Recuperar nube y exportar copia local" en tu menú.', '⚠️');
+                    } else if (error?.code === 'permission-denied') {
+                        showToast('Permiso denegado en Firestore. Revisa las reglas de seguridad de Firebase.', '⚠️');
+                    }
                     return false;
                 } finally {
                     activeSync = null;
@@ -3694,8 +3769,9 @@ ${JSON.stringify(payload, null, 2)}`;
             })();
             return activeSync;
         }
-        const pushToCloud = synchronize;
+
         const pullFromCloud = synchronize;
+
         window.cloudSync = {
             schedule() {
                 if (!currentUser) return;
@@ -3704,13 +3780,32 @@ ${JSON.stringify(payload, null, 2)}`;
                 syncTimer = setTimeout(synchronize, 800);
             },
         };
-        window.addEventListener('online', () => synchronize());
-        window.addEventListener('offline', () => { if (currentUser) setSyncStatus('error'); });
-        window.addEventListener('focus', () => { if (currentUser) synchronize(); });
+
+        window.addEventListener('online', () => { if (currentUser) synchronize(); });
+        window.addEventListener('offline', () => {
+            if (currentUser) setSyncStatus('error', 'Sin conexión a internet.');
+        });
+        window.addEventListener('focus', () => {
+            if (!currentUser) return;
+            const now = Date.now();
+            if (now - lastFocusSyncAt < 5000) return;
+            lastFocusSyncAt = now;
+            synchronize();
+        });
         document.addEventListener('visibilitychange', () => {
-            if (currentUser) {
-                clearTimeout(syncTimer);
-                synchronize();
+            if (!currentUser) return;
+            if (document.visibilityState === 'hidden') {
+                // Solo subir al ocultar la pestaña si hay cambios locales sin guardar
+                if (dataUpdatedAt > acknowledgedAt) {
+                    clearTimeout(syncTimer);
+                    synchronize();
+                }
+            } else if (document.visibilityState === 'visible') {
+                const now = Date.now();
+                if (now - lastFocusSyncAt >= 5000) {
+                    lastFocusSyncAt = now;
+                    synchronize();
+                }
             }
         });
 
@@ -3720,9 +3815,26 @@ ${JSON.stringify(payload, null, 2)}`;
                 loginInProgress = true;
                 await signInWithPopup(auth, googleProvider);
             } catch (e) {
+                console.error('[Firebase Auth Error]', e);
+                if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') {
+                    // Fallback automático para móviles o navegadores que bloquean popups
+                    try {
+                        await signInWithRedirect(auth, googleProvider);
+                        return;
+                    } catch (redirectErr) {
+                        console.error('[Firebase Redirect Error]', redirectErr);
+                        loginInProgress = false;
+                        const detail = describeFirebaseError(redirectErr);
+                        setSyncStatus('error', detail);
+                        showToast(detail, '⚠️');
+                        return;
+                    }
+                }
                 loginInProgress = false;
-                if (e.code !== 'auth/popup-closed-by-user') {
-                    showToast('No se pudo iniciar sesión con Google', '⚠️');
+                if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+                    const detail = describeFirebaseError(e);
+                    setSyncStatus('error', detail);
+                    showToast(detail, '⚠️');
                 }
             }
         };
@@ -3730,13 +3842,19 @@ ${JSON.stringify(payload, null, 2)}`;
         window.logoutUser = async function () {
             document.getElementById('user-menu').classList.add('hidden');
             clearTimeout(syncTimer);
-            if (currentUser && !await synchronize()) {
+            if (currentUser && dataUpdatedAt > acknowledgedAt && !await synchronize()) {
                 showToast('No se pudo guardar en la nube. Tus cambios siguen en este navegador.', '⚠️');
                 return;
             }
             generation++;
             ready = false;
-            try { await signOut(auth); } catch (e) { showToast('No se pudo cerrar sesión', '⚠️'); return; }
+            try {
+                await signOut(auth);
+            } catch (e) {
+                console.error('[Firebase SignOut Error]', e);
+                showToast('No se pudo cerrar sesión', '⚠️');
+                return;
+            }
             currentUser = null;
             renderAuthUI();
             showToast('Sesión cerrada');
@@ -3745,8 +3863,8 @@ ${JSON.stringify(payload, null, 2)}`;
         window.syncNow = async function () {
             document.getElementById('user-menu').classList.add('hidden');
             clearTimeout(syncTimer);
-            if (await synchronize()) showToast('Datos sincronizados', '☁️');
-            else showToast('No se pudo sincronizar. Tus datos locales se conservan.', '⚠️');
+            if (await synchronize()) showToast('Datos sincronizados con Firebase', '☁️');
+            else showToast(lastSyncErrorText || 'No se pudo sincronizar. Tus datos locales se conservan.', '⚠️');
         };
 
         window.recoverCloudData = async function () {
@@ -3758,23 +3876,29 @@ ${JSON.stringify(payload, null, 2)}`;
             const start = dataUpdatedAt;
             try {
                 const cloud = await api('GET');
-                if (session !== generation || !cloud.exists) return;
+                if (session !== generation) return;
+                if (!cloud.exists) {
+                    showToast('Todavía no hay datos guardados en la nube para esta cuenta.', 'ℹ️');
+                    return;
+                }
                 if (start !== dataUpdatedAt) {
                     showToast('Hay cambios nuevos pendientes. Vuelve a intentar la recuperación.', '⚠️');
                     return;
                 }
-                localStorage.setItem('edr_backup_' + currentUser.id, JSON.stringify(snapshot()));
+                safeLocalSet('edr_backup_' + currentUser.id, JSON.stringify(snapshot()));
                 exportJSON();
                 applyCloud(cloud);
-                revision = cloud.revision;
+                revision = Number(cloud.revision || 0);
                 acknowledgedAt = dataUpdatedAt;
                 ready = true;
                 remember();
                 setSyncStatus('synced');
                 showToast('Datos de la nube recuperados; copia local exportada.', '☁️');
-            } catch {
-                setSyncStatus('error');
-                showToast('No se pudo recuperar la nube. Tus datos locales se conservan.', '⚠️');
+            } catch (err) {
+                console.error('[Firebase Recover Error]', err);
+                const detail = describeFirebaseError(err);
+                setSyncStatus('error', detail);
+                showToast(detail, '⚠️');
             }
         };
 
@@ -3788,7 +3912,18 @@ ${JSON.stringify(payload, null, 2)}`;
             }
         });
 
-        function initAuth() {
+        async function initAuth() {
+            // Procesar retorno de signInWithRedirect si se usó fallback móvil
+            try {
+                const redir = await getRedirectResult(auth);
+                if (redir?.user) loginInProgress = true;
+            } catch (e) {
+                console.error('[Firebase Redirect Result Error]', e);
+                const detail = describeFirebaseError(e);
+                setSyncStatus('error', detail);
+                showToast(detail, '⚠️');
+            }
+
             onAuthStateChanged(auth, async (fbUser) => {
                 const user = mapUser(fbUser);
                 if (user) {
