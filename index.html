@@ -3649,6 +3649,204 @@ ${JSON.stringify(payload, null, 2)}`;
                 } catch (error) {
                     if (session !== generation) return false;
                     setSyncStatus('error');
+                    if (error.status === 409) showToast('Hay cambios en otro dispositi    <!-- ============================================================================
+         LOGIN CON GOOGLE (Firebase Auth) + SINCRONIZACIÓN EN LA NUBE (Firestore)
+         ============================================================================ -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+        import {
+            getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+        } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+        import {
+            getFirestore, doc, getDoc, runTransaction
+        } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyATMVniXwUSq58THMY_fMDcOuw8TDvp7M",
+            authDomain: "entrenaedr.firebaseapp.com",
+            projectId: "entrenaedr",
+            storageBucket: "entrenaedr.firebasestorage.app",
+            messagingSenderId: "847970882200",
+            appId: "1:847970882200:web:69afc8e8b46bc8e79fefc6",
+            measurementId: "G-5280H0VBTR"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        let currentUser = null;
+        let syncTimer = null;
+        let pendingSync = false;
+
+        function mapUser(fbUser) {
+            if (!fbUser) return null;
+            return {
+                id: fbUser.uid,
+                email: fbUser.email || '',
+                name: fbUser.displayName || fbUser.email || 'Usuario',
+                pictureUrl: fbUser.photoURL || ''
+            };
+        }
+
+        function setSyncStatus(state) {
+            const dot = document.getElementById('sync-dot');
+            const label = document.getElementById('sync-label');
+            const modal = document.getElementById('cloud-modal-status');
+            const map = {
+                local: ['bg-amber-400', 'Solo en este navegador'],
+                syncing: ['bg-sky-400 animate-pulse', 'Sincronizando…'],
+                synced: ['bg-emerald-500', 'Guardado en la nube'],
+                error: ['bg-rose-500', 'Error de sincronización'],
+            };
+            const [cls, text] = map[state] || map.local;
+            if (dot) dot.className = 'w-2 h-2 rounded-full ' + cls;
+            if (label) label.textContent = text;
+            if (modal) {
+                modal.textContent = currentUser
+                    ? `Cuenta: ${currentUser.email || ''} · ${text}`
+                    : 'No has iniciado sesión: los datos solo están en este navegador.';
+            }
+        }
+
+        function renderAuthUI() {
+            const loginBtn = document.getElementById('google-login-btn');
+            const wrap = document.getElementById('user-menu-wrap');
+            if (!currentUser) {
+                loginBtn.classList.remove('hidden');
+                wrap.classList.add('hidden');
+                setSyncStatus('local');
+                return;
+            }
+            loginBtn.classList.add('hidden');
+            wrap.classList.remove('hidden');
+            const name = currentUser.name || currentUser.email || 'Usuario';
+            document.getElementById('user-name').textContent = name.split(' ')[0];
+            document.getElementById('user-menu-name').textContent = name;
+            document.getElementById('user-menu-email').textContent = currentUser.email || '';
+            const avatar = document.getElementById('user-avatar');
+            const initial = document.getElementById('user-initial');
+            if (currentUser.pictureUrl) {
+                avatar.src = currentUser.pictureUrl;
+                avatar.classList.remove('hidden');
+                initial.classList.add('hidden');
+            } else {
+                avatar.classList.add('hidden');
+                initial.classList.remove('hidden');
+                initial.textContent = name.charAt(0).toUpperCase();
+            }
+        }
+
+        let activeSync = null;
+        let revision = 0;
+        let acknowledgedAt = 0;
+        let ready = false;
+        let generation = 0;
+        const META_KEY = 'edr_cloud_sync_v3';
+
+        function readMeta() {
+            try { return JSON.parse(localStorage.getItem(META_KEY)) || {}; } catch { return {}; }
+        }
+        function remember() {
+            localStorage.setItem(META_KEY, JSON.stringify({ userId: currentUser.id, revision, acknowledgedAt }));
+        }
+        function snapshot() {
+            return JSON.parse(JSON.stringify({ updatedAt: dataUpdatedAt, entries, workbooks, languages, weeklyNotes,
+                alarmMeta: { source: alarmConfig.source } }));
+        }
+        async function api(method, body) {
+            if (!currentUser) throw new Error('No autenticado');
+            const ref = doc(db, 'userData', currentUser.id);
+            if (method === 'GET') {
+                const snap = await getDoc(ref);
+                if (!snap.exists()) return { exists: false };
+                return { exists: true, ...snap.data() };
+            }
+            if (method === 'PUT') {
+                return await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(ref);
+                    const currentRev = snap.exists() ? (snap.data().revision || 0) : 0;
+                    if (snap.exists() && currentRev !== body.baseRevision) {
+                        const error = new Error('Conflict');
+                        error.status = 409;
+                        throw error;
+                    }
+                    const nextRev = currentRev + 1;
+                    const { baseRevision, ...payload } = body;
+                    tx.set(ref, { ...payload, revision: nextRev });
+                    return { revision: nextRev };
+                });
+            }
+        }
+        function applyCloud(data) {
+            entries = migrateLegacyEntriesMap(data.entries || {});
+            workbooks = Array.isArray(data.workbooks) ? data.workbooks : [];
+            languages = Array.isArray(data.languages) && data.languages.length ? data.languages : [...DEFAULT_LANGUAGES];
+            weeklyNotes = data.weeklyNotes || {};
+            alarmConfig.source = data.alarmMeta?.source === 'mp3' && alarmConfig.mp3DataUrl ? 'mp3' : 'digital';
+            saveAllToStorage(false, Number(data.updatedAt) || 0);
+            try { localStorage.setItem(STORAGE_KEYS.ALARM_CONFIG, JSON.stringify(alarmConfig)); } catch {}
+            refreshLanguageSelectors();
+            updateWorkbooksHeaderBadge();
+            syncAlarmUIFromConfig();
+            renderCalendar();
+            updateDashboard();
+        }
+        async function synchronize() {
+            if (!currentUser || !navigator.onLine) {
+                if (currentUser) setSyncStatus('error');
+                return false;
+            }
+            if (activeSync) { pendingSync = true; return activeSync; }
+            const session = generation;
+            activeSync = (async () => {
+                setSyncStatus('syncing');
+                try {
+                    do {
+                        pendingSync = false;
+                        const start = dataUpdatedAt;
+                        const cloud = await api('GET');
+                        if (session !== generation) return false;
+                        const meta = readMeta();
+                        const sameAccount = meta.userId === currentUser.id;
+                        if (!ready) {
+                            revision = sameAccount ? Number(meta.revision || 0) : 0;
+                            acknowledgedAt = sameAccount ? Number(meta.acknowledgedAt || 0) : 0;
+                        }
+                        const dirty = dataUpdatedAt > acknowledgedAt;
+                        if (!cloud.exists && meta.userId && !sameAccount) {
+                            const error = new Error('Account changed'); error.status = 409; throw error;
+                        }
+                        if (cloud.exists && (!sameAccount || !dirty)) {
+                            if (dataUpdatedAt !== start) { pendingSync = true; continue; }
+                            if (!sameAccount) {
+                                localStorage.setItem('edr_backup_' + (meta.userId || 'guest'), JSON.stringify(snapshot()));
+                            }
+                            applyCloud(cloud);
+                            revision = cloud.revision;
+                            acknowledgedAt = dataUpdatedAt;
+                            ready = true;
+                            remember();
+                        } else {
+                            if (cloud.exists && cloud.revision !== revision) {
+                                const error = new Error('Conflict'); error.status = 409; throw error;
+                            }
+                            const sent = snapshot();
+                            const result = await api('PUT', { ...sent, baseRevision: cloud.exists ? revision : 0 });
+                            if (session !== generation) return false;
+                            revision = result.revision;
+                            acknowledgedAt = sent.updatedAt;
+                            ready = true;
+                            remember();
+                            if (dataUpdatedAt !== sent.updatedAt) pendingSync = true;
+                        }
+                    } while (pendingSync);
+                    setSyncStatus('synced');
+                    return true;
+                } catch (error) {
+                    if (session !== generation) return false;
+                    setSyncStatus('error');
                     if (error.status === 409) showToast('Hay cambios en otro dispositivo. Tus cambios locales se conservan: usa Recuperar nube y exportar copia local en el menú de tu cuenta.', '⚠️');
                     return false;
                 } finally {
@@ -3677,8 +3875,17 @@ ${JSON.stringify(payload, null, 2)}`;
             }
         });
 
-        window.loginWithGoogle = function () {
-            try { oauthLogin('google'); } catch (e) { showToast('No se pudo iniciar sesión con Google', '⚠️'); }
+        let loginInProgress = false;
+        window.loginWithGoogle = async function () {
+            try {
+                loginInProgress = true;
+                await signInWithPopup(auth, googleProvider);
+            } catch (e) {
+                loginInProgress = false;
+                if (e.code !== 'auth/popup-closed-by-user') {
+                    showToast('No se pudo iniciar sesión con Google', '⚠️');
+                }
+            }
         };
 
         window.logoutUser = async function () {
@@ -3690,7 +3897,7 @@ ${JSON.stringify(payload, null, 2)}`;
             }
             generation++;
             ready = false;
-            try { await logout(); } catch (e) { showToast('No se pudo cerrar sesión', '⚠️'); return; }
+            try { await signOut(auth); } catch (e) { showToast('No se pudo cerrar sesión', '⚠️'); return; }
             currentUser = null;
             renderAuthUI();
             showToast('Sesión cerrada');
@@ -3742,29 +3949,23 @@ ${JSON.stringify(payload, null, 2)}`;
             }
         });
 
-        async function initAuth() {
-            let justLoggedIn = false;
-            try {
-                const result = await handleAuthCallback();
-                if (result && result.type === 'oauth') justLoggedIn = true;
-            } catch (e) {
-                showToast('Error al iniciar sesión con Google', '⚠️');
-            }
-            currentUser = await getUser();
-            renderAuthUI();
-            if (currentUser) {
-                await pullFromCloud();
-                if (justLoggedIn) showToast(`Hola, ${(currentUser.name || currentUser.email || '').split(' ')[0]}`, '👋');
-            }
-
-            onAuthChange(async (event, user) => {
-                if (event === AUTH_EVENTS.LOGIN && user && (!currentUser || currentUser.id !== user.id)) {
-                    generation++;
-                    ready = false;
-                    currentUser = user;
-                    renderAuthUI();
-                    await pullFromCloud();
-                } else if (event === AUTH_EVENTS.LOGOUT) {
+        function initAuth() {
+            onAuthStateChanged(auth, async (fbUser) => {
+                const user = mapUser(fbUser);
+                if (user) {
+                    if (!currentUser || currentUser.id !== user.id) {
+                        generation++;
+                        ready = false;
+                        currentUser = user;
+                        renderAuthUI();
+                        await pullFromCloud();
+                        if (loginInProgress) {
+                            loginInProgress = false;
+                            showToast(`Hola, ${(currentUser.name || currentUser.email || '').split(' ')[0]}`, '👋');
+                        }
+                    }
+                } else {
+                    loginInProgress = false;
                     generation++;
                     ready = false;
                     clearTimeout(syncTimer);
@@ -3777,5 +3978,6 @@ ${JSON.stringify(payload, null, 2)}`;
         if (window.appReady) initAuth();
         else window.addEventListener('app-ready', initAuth, { once: true });
     </script>
+
 </body>
 </html>
