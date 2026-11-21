@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arquitectura del Freestyle · Tracker EDR v2.1</title>
+    <title>Arquitectura del Freestyle · Tracker EDR v2.2</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Inter & JetBrains Mono -->
@@ -294,15 +294,27 @@
             
             <!-- Calendario Perpetuo (8 columnas en desktop) -->
             <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                     <div>
-                        <h3 class="text-sm font-semibold text-slate-900">Calendario Multi-Sesión Perpetuo</h3>
-                        <p class="text-xs text-slate-500">Soporta múltiples entrenamientos e idiomas por día. Haz clic para gestionar tus sesiones.</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-sm font-semibold text-slate-900">Calendario de Entrenamiento Perpetuo</h3>
+                            <!-- Selector de Vista de Calendario: Clásico vs Multi-Sesión -->
+                            <div class="inline-flex items-center bg-sand-100 p-0.5 rounded-lg border border-slate-200/80" title="Cambiar diseño visual del calendario">
+                                <button type="button" id="cal-view-classic-btn" onclick="setCalendarViewMode('classic')" class="text-[11px] font-semibold px-2 py-0.5 rounded-md transition bg-white text-slate-900 shadow-sm">
+                                    ◻ Clásico
+                                </button>
+                                <button type="button" id="cal-view-multi-btn" onclick="setCalendarViewMode('multi')" class="text-[11px] font-medium px-2 py-0.5 rounded-md transition text-slate-600 hover:text-slate-900">
+                                    ☰ Multi-Sesión
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">Haz clic en cualquier día para planificar, usar el reloj EDR o registrar sesiones.</p>
                     </div>
                     <!-- Leyenda -->
-                    <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+                    <div class="flex flex-wrap items-center gap-2.5 text-[11px] text-slate-600">
                         <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-sage-500"></span>Solitario</span>
                         <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>Infranich</span>
+                        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>Libre</span>
                         <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>Recuperación</span>
                         <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>Descanso</span>
                     </div>
@@ -432,6 +444,7 @@
                     <label class="block text-xs font-semibold text-slate-700 mb-1.5">Modalidad</label>
                     <select id="field-modalidad" onchange="onModalidadChange()" class="w-full text-xs bg-white border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-sage-500">
                         <option value="solitario">🎧 Solitario (EDR)</option>
+                        <option value="libre">🎤 Libre (Rapear y ya)</option>
                         <option value="grupal">🎙️ Clase Infranich</option>
                         <option value="descanso">🌿 Descanso Activo</option>
                     </select>
@@ -762,6 +775,145 @@
                 </div>
             </div>
 
+            <!-- SECCIÓN LIBRE: RAPEAR Y YA (CRONÓMETRO / POMODORO + DICTADO VOZ) -->
+            <div id="section-libre" class="hidden space-y-5">
+                <div class="bg-purple-50/60 border border-purple-200/80 rounded-2xl p-4 sm:p-5 space-y-4 shadow-sm">
+                    <!-- Cabecera y Selector de Modo de Reloj -->
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <span id="free-timer-dot" class="w-2 h-2 rounded-full bg-purple-600"></span>
+                            <span id="free-timer-status" class="text-[11px] font-mono font-bold uppercase tracking-wider text-purple-800">MODO LIBRE · LISTO</span>
+                        </div>
+                        <div class="inline-flex bg-white p-1 rounded-xl border border-purple-200/80">
+                            <button type="button" id="free-mode-stopwatch-btn" onclick="setFreeClockMode('stopwatch')" class="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-600 text-white transition">
+                                ⏱️ Cronómetro
+                            </button>
+                            <button type="button" id="free-mode-pomodoro-btn" onclick="setFreeClockMode('pomodoro')" class="text-[11px] font-medium px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition">
+                                🍅 Pomodoro
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUBPANEL 1: CRONÓMETRO ASCENDENTE (00:00 -> ∞) -->
+                    <div id="free-panel-stopwatch" class="flex flex-col items-center justify-center py-3 space-y-4">
+                        <div class="text-center">
+                            <div id="free-stopwatch-display" class="text-5xl font-bold font-mono text-slate-900 tracking-tight">00:00</div>
+                            <p class="text-[11px] text-slate-500 mt-1.5">Sin límites ni bloques · Sigue contando aunque apagues la pantalla</p>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-center gap-2.5">
+                            <button type="button" onclick="resetFreeTimer()" title="Reiniciar cronómetro" class="w-11 h-11 rounded-full bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center shadow-sm transition">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            </button>
+
+                            <button type="button" id="free-sw-play-btn" onclick="toggleFreeTimer()" class="inline-flex items-center gap-2 px-5 h-12 rounded-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-md transition">
+                                <span id="free-sw-play-icon">▶</span>
+                                <span id="free-sw-play-label">Iniciar</span>
+                            </button>
+
+                            <button type="button" onclick="finishFreeTimerSession()" title="Detener y volcar minutos al registro" class="inline-flex items-center gap-1.5 px-4 h-11 rounded-full bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold shadow-sm transition">
+                                <span>✓ Finalizar y volcar</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUBPANEL 2: POMODORO LIBRE -->
+                    <div id="free-panel-pomodoro" class="hidden space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-purple-200/70">
+                            <div class="flex items-center gap-2">
+                                <label class="text-[11px] font-semibold text-slate-700">Ciclo:</label>
+                                <select id="free-pomo-preset" onchange="onFreePomodoroPresetChange()" class="text-xs bg-sand-50 border border-slate-200 rounded-lg px-2 py-1 font-mono font-semibold text-slate-800">
+                                    <option value="15-3">15m rap / 3m pausa</option>
+                                    <option value="25-5" selected>25m rap / 5m pausa</option>
+                                    <option value="45-10">45m rap / 10m pausa</option>
+                                    <option value="custom">Personalizado</option>
+                                </select>
+                            </div>
+                            <span id="free-pomo-rounds-badge" class="text-[11px] font-mono text-purple-800 bg-purple-100/80 px-2.5 py-0.5 rounded-lg">
+                                Rondas: 0 · Acum: 0m
+                            </span>
+                        </div>
+
+                        <div id="free-pomo-custom-row" class="hidden grid grid-cols-2 gap-2 bg-white p-2.5 rounded-xl border border-purple-200/70">
+                            <div>
+                                <label class="block text-[10px] text-slate-500 mb-0.5">Minutos Rapear</label>
+                                <input type="number" id="free-pomo-custom-work" min="1" max="180" value="20" onchange="onFreePomodoroPresetChange()" class="w-full font-mono text-xs border border-slate-300 rounded-lg px-2.5 py-1.5">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-slate-500 mb-0.5">Minutos Pausa</label>
+                                <input type="number" id="free-pomo-custom-break" min="1" max="60" value="5" onchange="onFreePomodoroPresetChange()" class="w-full font-mono text-xs border border-slate-300 rounded-lg px-2.5 py-1.5">
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col items-center justify-center py-1">
+                            <div class="relative w-40 h-40 flex items-center justify-center">
+                                <svg class="w-full h-full" viewBox="0 0 180 180">
+                                    <circle cx="90" cy="90" r="74" fill="none" stroke="#e2e8f0" stroke-width="10"></circle>
+                                    <circle id="free-pomo-ring" class="progress-ring-circle" cx="90" cy="90" r="74" fill="none" stroke="#9333ea" stroke-width="10" stroke-linecap="round" stroke-dasharray="464.956" stroke-dashoffset="0"></circle>
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center px-3">
+                                    <span id="free-pomo-display" class="text-3xl font-bold font-mono text-slate-900 tracking-tight">25:00</span>
+                                    <span id="free-pomo-phase-label" class="text-[11px] font-medium text-purple-700 mt-1">Ronda 1 · Rapear</span>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-center gap-3 mt-3">
+                                <button type="button" onclick="resetFreeTimer()" title="Reiniciar ronda actual" class="w-10 h-10 rounded-full bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center shadow-sm transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                </button>
+
+                                <button type="button" id="free-pomo-play-btn" onclick="toggleFreeTimer()" title="Iniciar / Pausar" class="w-12 h-12 rounded-full bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center shadow-md transition">
+                                    <svg id="free-pomo-icon-play" class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                                    <svg id="free-pomo-icon-pause" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                                </button>
+
+                                <button type="button" onclick="skipFreePomodoroPhase()" title="Cambiar entre Rap y Pausa" class="w-10 h-10 rounded-full bg-white hover:bg-purple-50 text-purple-700 border border-slate-200 flex items-center justify-center shadow-sm transition">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                                </button>
+                            </div>
+
+                            <div id="free-pomo-finished-banner" class="hidden mt-3 w-full bg-purple-100/90 border border-purple-300 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                                <span id="free-pomo-finished-text" class="text-xs font-medium text-purple-950">🔔 ¡Bloque terminado!</span>
+                                <button type="button" onclick="skipFreePomodoroPhase()" class="text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg transition shrink-0">
+                                    Siguiente →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Duración Real & Percepciones con Dictado por Voz (Sin fatiga mental) -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Duración Real Rapeada (min)</label>
+                            <input type="number" id="field-libre-min" min="0" max="600" step="1" value="0" class="w-full font-mono text-sm bg-white border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        </div>
+                        <p class="text-[11px] text-slate-500 leading-snug pb-1">
+                            Se rellena automáticamente al pausar o finalizar el reloj, o puedes escribir los minutos manualmente.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="block text-xs font-semibold text-slate-700">Percepciones de la Sesión Libre</label>
+                            <button type="button" id="btn-voice-dictation" onclick="toggleVoiceDictation()" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 transition">
+                                <span id="voice-btn-dot" class="w-2 h-2 rounded-full bg-purple-600"></span>
+                                <span id="voice-btn-label">🎤 Dictar por voz</span>
+                            </button>
+                        </div>
+
+                        <!-- Vista previa en vivo mientras hablas -->
+                        <div id="voice-interim-box" class="hidden bg-rose-50/90 border border-rose-200 rounded-xl px-3 py-2 text-xs text-rose-900 flex items-center justify-between gap-2">
+                            <span id="voice-interim-text" class="italic truncate">Escuchando...</span>
+                            <span id="voice-lang-tag" class="font-mono text-[10px] font-bold bg-white px-1.5 py-0.5 rounded border border-rose-200 shrink-0">es-ES</span>
+                        </div>
+
+                        <textarea id="field-libre-percepciones" rows="4" placeholder="Escribe o dicta por voz cómo te sentiste rapeando, qué ideas fluyeron, si estuviste solo o con amigos..." class="w-full text-xs bg-white border border-slate-300 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+                    </div>
+                </div>
+            </div>
+
             <!-- SECCIÓN B: CLASE GRUPAL CON INFRANICH -->
             <div id="section-grupal" class="hidden space-y-4">
                 <div class="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-200/80 space-y-4">
@@ -1060,7 +1212,7 @@
             UPDATED_AT: 'edr_freestyle_updated_at_v2'
         };
 
-        const BASE_DOC_TITLE = 'Arquitectura del Freestyle · Tracker EDR v2.1';
+        const BASE_DOC_TITLE = document.title || 'Arquitectura del Freestyle · Tracker EDR v2.2';
         let dataUpdatedAt = Number(localStorage.getItem(STORAGE_KEYS.UPDATED_AT) || 0);
 
         function escapeHtml(str) {
@@ -1096,6 +1248,8 @@
         let activeSessionIndex = 0;
         let statsScope = 'week';
         let globalLanguageFilter = 'ALL';
+        const CAL_VIEW_STORAGE_KEY = 'edr_freestyle_cal_view_v1';
+        let calendarViewMode = localStorage.getItem(CAL_VIEW_STORAGE_KEY) || 'classic'; // 'classic' | 'multi'
 
         // Estado temporal de selecciones de ejercicios en el formulario abierto
         let formCatalogState = {
@@ -1841,7 +1995,28 @@
         // ============================================================================
         // 5. RENDERIZADO DEL CALENDARIO PERPETUO (MULTI-SESIÓN + IDIOMAS)
         // ============================================================================
+        function syncCalendarViewButtons() {
+            const classicBtn = document.getElementById('cal-view-classic-btn');
+            const multiBtn = document.getElementById('cal-view-multi-btn');
+            if (!classicBtn || !multiBtn) return;
+
+            classicBtn.className = calendarViewMode === 'classic'
+                ? 'text-[11px] font-semibold px-2 py-0.5 rounded-md transition bg-white text-slate-900 shadow-sm'
+                : 'text-[11px] font-medium px-2 py-0.5 rounded-md transition text-slate-600 hover:text-slate-900';
+            multiBtn.className = calendarViewMode === 'multi'
+                ? 'text-[11px] font-semibold px-2 py-0.5 rounded-md transition bg-white text-slate-900 shadow-sm'
+                : 'text-[11px] font-medium px-2 py-0.5 rounded-md transition text-slate-600 hover:text-slate-900';
+        }
+
+        function setCalendarViewMode(mode) {
+            calendarViewMode = mode === 'multi' ? 'multi' : 'classic';
+            try { localStorage.setItem(CAL_VIEW_STORAGE_KEY, calendarViewMode); } catch (e) {}
+            syncCalendarViewButtons();
+            renderCalendar();
+        }
+
         function renderCalendar() {
+            syncCalendarViewButtons();
             const grid = document.getElementById('calendar-grid');
             const label = document.getElementById('current-month-label');
             label.textContent = `${MONTH_NAMES[currentMonth]} ${currentYear}`;
@@ -1852,10 +2027,13 @@
             const startWeekday = (firstDay.getDay() + 6) % 7;
             const totalDays = lastDay.getDate();
             const todayISO = toISO(new Date());
+            const isClassic = calendarViewMode === 'classic';
 
             for (let i = 0; i < startWeekday; i++) {
                 const empty = document.createElement('div');
-                empty.className = 'h-24 sm:h-28 rounded-xl bg-slate-50/50 border border-transparent';
+                empty.className = isClassic
+                    ? 'h-20 sm:h-24 rounded-xl bg-slate-50/50 border border-transparent'
+                    : 'h-24 sm:h-28 rounded-xl bg-slate-50/50 border border-transparent';
                 grid.appendChild(empty);
             }
 
@@ -1869,71 +2047,156 @@
                 cell.type = 'button';
                 cell.onclick = () => openDayDrawer(iso);
 
-                let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
-                let linesHTML = '';
-
-                if (sessions.length > 0) {
-                    const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
-                    const hasGrupal = sessions.some(s => s.modalidad === 'grupal');
-                    const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
-
-                    if (allDescanso) {
-                        bgClass = 'bg-sand-100/80 border-slate-200 text-slate-600';
-                    } else if (hasRecovery) {
-                        bgClass = 'bg-amber-50/60 border-amber-200 hover:border-amber-400';
-                    } else if (hasGrupal && sessions.length === 1) {
-                        bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
-                    } else {
-                        bgClass = 'bg-sage-50/50 border-sage-200 hover:border-sage-500';
-                    }
-
-                    linesHTML = sessions.slice(0, 3).map(s => {
-                        const lang = s.idioma || 'ES';
-                        const check = s.estado === 'completado' ? '✓' : '';
-                        if (s.modalidad === 'descanso' || s.estado === 'descanso') {
-                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-white/80 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200/80 truncate">
-                                <span class="font-mono font-bold text-slate-500">${lang}</span>
-                                <span class="truncate ml-1">Descanso</span>
-                            </div>`;
-                        } else if (s.modalidad === 'grupal') {
-                            const mins = s.min_reales || s.min_planificados || 120;
-                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-indigo-100/80 text-indigo-900 px-1.5 py-0.5 rounded truncate">
-                                <span class="font-mono font-bold">${lang}</span>
-                                <span class="font-mono truncate ml-1">${check}Inf ${mins}m</span>
-                            </div>`;
-                        } else {
-                            const isRec = Number(s.fatiga) >= 7 || s.modo_recuperacion_activo;
-                            const mins = s.min_reales > 0 ? s.min_reales : (s.min_planificados || 0);
-                            const pillCls = isRec ? 'bg-amber-100/90 text-amber-900' : 'bg-sage-100/90 text-sage-900';
-                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] ${pillCls} px-1.5 py-0.5 rounded truncate">
-                                <span class="font-mono font-bold">${lang}</span>
-                                <span class="font-mono truncate ml-1">${check}${mins}m</span>
-                            </div>`;
-                        }
-                    }).join('');
-
-                    if (sessions.length > 3) {
-                        linesHTML += `<div class="text-[9px] font-mono text-slate-500 text-right">+${sessions.length - 3} más</div>`;
-                    }
-                } else if (isSunday) {
-                    bgClass = 'bg-sand-50/70 border-slate-200/50 text-slate-500';
-                    linesHTML = `<span class="text-[10px] text-slate-400 hidden sm:block">Descanso</span>`;
-                }
-
                 const isSelected = iso === selectedDateStr;
                 const isToday = iso === todayISO;
                 const ringClass = isSelected ? 'ring-2 ring-sage-600' : (isToday ? 'ring-1 ring-slate-900' : '');
 
-                cell.className = `calendar-day h-24 sm:h-28 p-1.5 sm:p-2 rounded-xl border text-left flex flex-col justify-between relative overflow-hidden ${bgClass} ${ringClass}`;
-                cell.innerHTML = `
-                    <div class="flex items-center justify-between w-full">
-                        <span class="text-xs font-semibold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-700'}">${d}</span>
-                        ${sessions.length > 1 ? `<span class="text-[9px] font-mono font-bold bg-slate-800 text-white px-1.5 rounded-full">${sessions.length}x</span>` : ''}
-                    </div>
-                    <div class="w-full space-y-0.5 overflow-hidden">
-                        ${linesHTML}
-                    </div>
-                `;
+                if (isClassic) {
+                    // ============================================================
+                    // VISTA CLÁSICA (Estilo original compacto con punto superior)
+                    // ============================================================
+                    let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
+                    let badgeHTML = '';
+                    let footerHTML = '';
+                    let hasBloqueo = false;
+
+                    if (sessions.length > 0) {
+                        hasBloqueo = sessions.some(s => s.estado === 'bloqueo' || s.zona_mental === 'bloqueo');
+                        const primary = sessions[0];
+                        const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
+                        const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
+                        const extraTag = sessions.length > 1 ? ` · +${sessions.length - 1}` : '';
+
+                        if (allDescanso) {
+                            bgClass = 'bg-sand-100/80 border-slate-200 text-slate-600';
+                            badgeHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span>`;
+                            footerHTML = `<span class="text-[10px] text-slate-500 truncate block">Descanso${extraTag}</span>`;
+                        } else if (primary.modalidad === 'libre' && sessions.length === 1) {
+                            bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
+                            badgeHTML = `<span class="w-2 h-2 rounded-full bg-purple-500"></span>`;
+                            const mins = Number(primary.min_reales || 0);
+                            const statusIcon = primary.estado === 'completado' ? '✓ ' : '';
+                            footerHTML = `<span class="text-[10px] font-medium text-purple-800 truncate block">${statusIcon}Libre${mins > 0 ? ' ' + mins + 'm' : ''}</span>`;
+                        } else if (primary.modalidad === 'grupal' && sessions.length === 1) {
+                            bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
+                            badgeHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span>`;
+                            footerHTML = `<span class="text-[10px] font-medium text-indigo-700 truncate block">Infranich ${primary.min_reales || primary.min_planificados || 120}m</span>`;
+                        } else {
+                            if (hasRecovery) {
+                                bgClass = 'bg-amber-50/60 border-amber-200 hover:border-amber-400';
+                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span>`;
+                            } else if (primary.modalidad === 'libre') {
+                                bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
+                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-purple-500"></span>`;
+                            } else if (primary.modalidad === 'grupal') {
+                                bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
+                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span>`;
+                            } else {
+                                bgClass = 'bg-sage-50/50 border-sage-200 hover:border-sage-500';
+                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-sage-600"></span>`;
+                            }
+
+                            const totalMins = sessions.reduce((acc, s) => {
+                                if (s.modalidad === 'descanso') return acc;
+                                return acc + (Number(s.min_reales) > 0 ? Number(s.min_reales) : Number(s.min_planificados || 0));
+                            }, 0);
+                            const anyCompleted = sessions.some(s => s.estado === 'completado');
+                            const statusIcon = anyCompleted ? '✓ ' : '';
+                            const prefix = primary.modalidad === 'grupal' ? 'Inf ' : (primary.modalidad === 'libre' ? 'Libre ' : '');
+                            footerHTML = `<span class="text-[10px] font-mono font-medium ${anyCompleted ? 'text-sage-800' : 'text-slate-500'} truncate block">${statusIcon}${prefix}${totalMins}m${extraTag}</span>`;
+                        }
+                    } else if (isSunday) {
+                        bgClass = 'bg-sand-50/70 border-slate-200/50 text-slate-500';
+                        footerHTML = `<span class="text-[10px] text-slate-400 hidden sm:block">Descanso</span>`;
+                    }
+
+                    cell.className = `calendar-day h-20 sm:h-24 p-2 rounded-xl border text-left flex flex-col justify-between relative ${bgClass} ${ringClass}`;
+                    cell.innerHTML = `
+                        <div class="flex items-center justify-between w-full">
+                            <span class="text-xs sm:text-sm font-semibold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-700'}">${d}</span>
+                            ${badgeHTML}
+                        </div>
+                        <div class="w-full space-y-0.5">
+                            ${hasBloqueo ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500" title="Zona de bloqueo"></span>' : ''}
+                            ${footerHTML}
+                        </div>
+                    `;
+                } else {
+                    // ============================================================
+                    // VISTA MULTI-SESIÓN (Píldoras apiladas con código de idioma)
+                    // ============================================================
+                    let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
+                    let linesHTML = '';
+
+                    if (sessions.length > 0) {
+                        const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
+                        const hasGrupal = sessions.some(s => s.modalidad === 'grupal');
+                        const hasLibre = sessions.some(s => s.modalidad === 'libre');
+                        const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
+
+                        if (allDescanso) {
+                            bgClass = 'bg-sand-100/80 border-slate-200 text-slate-600';
+                        } else if (hasRecovery) {
+                            bgClass = 'bg-amber-50/60 border-amber-200 hover:border-amber-400';
+                        } else if (hasLibre && sessions.length === 1) {
+                            bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
+                        } else if (hasGrupal && sessions.length === 1) {
+                            bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
+                        } else {
+                            bgClass = 'bg-sage-50/50 border-sage-200 hover:border-sage-500';
+                        }
+
+                        linesHTML = sessions.slice(0, 3).map(s => {
+                            const lang = s.idioma || 'ES';
+                            const check = s.estado === 'completado' ? '✓' : '';
+                            if (s.modalidad === 'descanso' || s.estado === 'descanso') {
+                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-white/80 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200/80 truncate">
+                                    <span class="font-mono font-bold text-slate-500">${lang}</span>
+                                    <span class="truncate ml-1">Descanso</span>
+                                </div>`;
+                            } else if (s.modalidad === 'libre') {
+                                const mins = Number(s.min_reales || 0);
+                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-purple-100/90 text-purple-900 px-1.5 py-0.5 rounded truncate">
+                                    <span class="font-mono font-bold">${lang}</span>
+                                    <span class="font-mono truncate ml-1">${check}Libre${mins > 0 ? ' ' + mins + 'm' : ''}</span>
+                                </div>`;
+                            } else if (s.modalidad === 'grupal') {
+                                const mins = s.min_reales || s.min_planificados || 120;
+                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-indigo-100/80 text-indigo-900 px-1.5 py-0.5 rounded truncate">
+                                    <span class="font-mono font-bold">${lang}</span>
+                                    <span class="font-mono truncate ml-1">${check}Inf ${mins}m</span>
+                                </div>`;
+                            } else {
+                                const isRec = Number(s.fatiga) >= 7 || s.modo_recuperacion_activo;
+                                const mins = s.min_reales > 0 ? s.min_reales : (s.min_planificados || 0);
+                                const pillCls = isRec ? 'bg-amber-100/90 text-amber-900' : 'bg-sage-100/90 text-sage-900';
+                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] ${pillCls} px-1.5 py-0.5 rounded truncate">
+                                    <span class="font-mono font-bold">${lang}</span>
+                                    <span class="font-mono truncate ml-1">${check}${mins}m</span>
+                                </div>`;
+                            }
+                        }).join('');
+
+                        if (sessions.length > 3) {
+                            linesHTML += `<div class="text-[9px] font-mono text-slate-500 text-right">+${sessions.length - 3} más</div>`;
+                        }
+                    } else if (isSunday) {
+                        bgClass = 'bg-sand-50/70 border-slate-200/50 text-slate-500';
+                        linesHTML = `<span class="text-[10px] text-slate-400 hidden sm:block">Descanso</span>`;
+                    }
+
+                    cell.className = `calendar-day h-24 sm:h-28 p-1.5 sm:p-2 rounded-xl border text-left flex flex-col justify-between relative overflow-hidden ${bgClass} ${ringClass}`;
+                    cell.innerHTML = `
+                        <div class="flex items-center justify-between w-full">
+                            <span class="text-xs font-semibold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-700'}">${d}</span>
+                            ${sessions.length > 1 ? `<span class="text-[9px] font-mono font-bold bg-slate-800 text-white px-1.5 rounded-full">${sessions.length}x</span>` : ''}
+                        </div>
+                        <div class="w-full space-y-0.5 overflow-hidden">
+                            ${linesHTML}
+                        </div>
+                    `;
+                }
+
                 grid.appendChild(cell);
             }
         }
@@ -2000,6 +2263,8 @@
             const dateList = getFilteredDates(statsScope);
             let completedSolitario = 0;
             let completedGrupal = 0;
+            let completedLibre = 0;
+            let totalLibreMin = 0;
             let completedDescanso = 0;
 
             let totalPlanMin = 0;
@@ -2022,6 +2287,12 @@
                 const shortLabel = `${DAY_NAMES_FULL[dObj.getDay()].slice(0, 3)} ${dObj.getDate()}`;
 
                 sessions.forEach(s => {
+                    if (s.modalidad === 'libre') {
+                        if (s.estado === 'completado') completedLibre++;
+                        totalLibreMin += Number(s.min_reales || 0);
+                        return; // Modalidad Libre no altera % cumplimiento ni fatiga EDR
+                    }
+
                     if (s.estado === 'completado' || s.estado === 'descanso') {
                         if (s.modalidad === 'solitario') completedSolitario++;
                         else if (s.modalidad === 'grupal') completedGrupal++;
@@ -2056,9 +2327,15 @@
                 }
             });
 
-            const totalCompleted = completedSolitario + completedGrupal + completedDescanso;
+            const totalCompleted = completedSolitario + completedGrupal + completedLibre + completedDescanso;
             document.getElementById('kpi-completed').textContent = totalCompleted;
-            document.getElementById('kpi-modality-breakdown').textContent = `${completedSolitario} Solitario · ${completedGrupal} Infranich · ${completedDescanso} Descanso`;
+            const breakdownParts = [
+                `${completedSolitario} Solitario`,
+                `${completedGrupal} Infranich`,
+                `${completedLibre} Libre (${totalLibreMin}m)`
+            ];
+            if (completedDescanso > 0) breakdownParts.push(`${completedDescanso} Desc.`);
+            document.getElementById('kpi-modality-breakdown').textContent = breakdownParts.join(' · ');
 
             const adherence = totalPlanMin > 0 ? Math.round((totalRealMin / totalPlanMin) * 100) : 0;
             document.getElementById('kpi-adherence').textContent = `${adherence}%`;
@@ -2159,7 +2436,7 @@
             if (statsScope === 'week') {
                 const maxMins = 150;
                 weekRows.forEach(row => {
-                    let c = 0, i = 0, f = 0, el = 0, grupalMins = 0, hasDescanso = false;
+                    let c = 0, i = 0, f = 0, el = 0, grupalMins = 0, libreMins = 0, hasDescanso = false;
 
                     row.sessions.forEach(s => {
                         if (s.modalidad === 'solitario') {
@@ -2171,6 +2448,8 @@
                             el += dist.blocks.elongacion_flow;
                         } else if (s.modalidad === 'grupal') {
                             grupalMins += Number(s.min_reales || s.min_planificados || 120);
+                        } else if (s.modalidad === 'libre') {
+                            libreMins += Number(s.min_reales || 0);
                         } else if (s.modalidad === 'descanso') {
                             hasDescanso = true;
                         }
@@ -2183,6 +2462,9 @@
                         rightText = grupalMins > 0 && totalSolitario > 0
                             ? `${totalSolitario}m + ${grupalMins}m Inf`
                             : (grupalMins > 0 ? `Infranich ${grupalMins}m` : `${totalSolitario} min`);
+                        if (libreMins > 0) rightText += ` · Libre ${libreMins}m`;
+                    } else if (libreMins > 0) {
+                        rightText = `Libre ${libreMins}m`;
                     } else if (hasDescanso) {
                         rightText = 'Descanso';
                     }
@@ -2699,6 +2981,556 @@
             showToast('🔊 Reproduciendo alarma de prueba...', '🎵');
         }
 
+
+        // ============================================================================
+        // 7B. RELOJ DUAL MODALIDAD LIBRE (CRONÓMETRO + POMODORO) Y DICTADO POR VOZ
+        // ============================================================================
+        const FREE_POMO_CIRCUMFERENCE = 2 * Math.PI * 74; // r=74 -> ~464.956
+        const freeTimerStates = {}; // { [sessionId]: estado persistente en memoria }
+
+        let freeTimerInterval = null;
+        let freeTimerRunning = false;
+        let freeClockMode = 'stopwatch'; // 'stopwatch' | 'pomodoro'
+        let freeActiveSessionId = null;
+
+        // Estado Cronómetro Ascendente (Date.now())
+        let freeSwAccumulatedMs = 0;
+        let freeSwStartTimestamp = null;
+
+        // Estado Pomodoro Libre (Date.now())
+        let freePomoPreset = '25-5';
+        let freePomoPhase = 'work'; // 'work' | 'break'
+        let freePomoWorkSec = 25 * 60;
+        let freePomoBreakSec = 5 * 60;
+        let freePomoRemainingSec = 25 * 60;
+        let freePomoEndTimestamp = null;
+        let freePomoRoundsCompleted = 0;
+        let freePomoAccumulatedWorkMs = 0;
+        let freePomoPhaseStartTimestamp = null;
+
+        function formatFreeStopwatch(totalSec) {
+            const hrs = Math.floor(totalSec / 3600);
+            const mins = Math.floor((totalSec % 3600) / 60);
+            const secs = totalSec % 60;
+            if (hrs > 0) {
+                return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function saveCurrentFreeTimerState() {
+            if (!freeActiveSessionId) return;
+            freeTimerStates[freeActiveSessionId] = {
+                freeClockMode,
+                freeSwAccumulatedMs,
+                freePomoPreset,
+                freePomoPhase,
+                freePomoWorkSec,
+                freePomoBreakSec,
+                freePomoRemainingSec,
+                freePomoRoundsCompleted,
+                freePomoAccumulatedWorkMs
+            };
+        }
+
+        function initFreeTimerForSession(sessionObj) {
+            pauseFreeTimer(false);
+            freeActiveSessionId = sessionObj?.id || null;
+            const saved = freeActiveSessionId ? freeTimerStates[freeActiveSessionId] : null;
+
+            if (saved) {
+                freeClockMode = saved.freeClockMode || 'stopwatch';
+                freeSwAccumulatedMs = saved.freeSwAccumulatedMs || 0;
+                freePomoPreset = saved.freePomoPreset || '25-5';
+                freePomoPhase = saved.freePomoPhase || 'work';
+                freePomoWorkSec = saved.freePomoWorkSec || 25 * 60;
+                freePomoBreakSec = saved.freePomoBreakSec || 5 * 60;
+                freePomoRemainingSec = saved.freePomoRemainingSec ?? freePomoWorkSec;
+                freePomoRoundsCompleted = saved.freePomoRoundsCompleted || 0;
+                freePomoAccumulatedWorkMs = saved.freePomoAccumulatedWorkMs || 0;
+            } else {
+                freeClockMode = sessionObj?.modo_reloj_libre || 'stopwatch';
+                const existingMins = Number(sessionObj?.min_reales || 0);
+                freeSwAccumulatedMs = (freeClockMode === 'stopwatch' && existingMins > 0) ? existingMins * 60 * 1000 : 0;
+                freePomoPreset = '25-5';
+                freePomoPhase = 'work';
+                freePomoWorkSec = 25 * 60;
+                freePomoBreakSec = 5 * 60;
+                freePomoRemainingSec = 25 * 60;
+                freePomoRoundsCompleted = 0;
+                freePomoAccumulatedWorkMs = 0;
+            }
+
+            freeSwStartTimestamp = null;
+            freePomoEndTimestamp = null;
+            freePomoPhaseStartTimestamp = null;
+
+            const presetSel = document.getElementById('free-pomo-preset');
+            if (presetSel) presetSel.value = freePomoPreset;
+            document.getElementById('free-pomo-custom-row').classList.toggle('hidden', freePomoPreset !== 'custom');
+            document.getElementById('free-pomo-finished-banner').classList.add('hidden');
+
+            setFreeClockMode(freeClockMode, false);
+            updateFreeTimerUI();
+            updateFreeTimerHeader('MODO LIBRE · LISTO', false);
+        }
+
+        function setFreeClockMode(mode, resetRunning = true) {
+            if (resetRunning && freeTimerRunning) pauseFreeTimer(true);
+            freeClockMode = mode;
+
+            const swBtn = document.getElementById('free-mode-stopwatch-btn');
+            const poBtn = document.getElementById('free-mode-pomodoro-btn');
+            const swPanel = document.getElementById('free-panel-stopwatch');
+            const poPanel = document.getElementById('free-panel-pomodoro');
+
+            if (mode === 'stopwatch') {
+                swBtn.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-600 text-white transition';
+                poBtn.className = 'text-[11px] font-medium px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition';
+                swPanel.classList.remove('hidden');
+                poPanel.classList.add('hidden');
+            } else {
+                poBtn.className = 'text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-600 text-white transition';
+                swBtn.className = 'text-[11px] font-medium px-2.5 py-1 rounded-lg text-slate-600 hover:text-slate-900 transition';
+                poPanel.classList.remove('hidden');
+                swPanel.classList.add('hidden');
+            }
+            saveCurrentFreeTimerState();
+            updateFreeTimerUI();
+        }
+
+        function onFreePomodoroPresetChange() {
+            if (freeTimerRunning) pauseFreeTimer(true);
+            const val = document.getElementById('free-pomo-preset').value;
+            freePomoPreset = val;
+            const customRow = document.getElementById('free-pomo-custom-row');
+
+            if (val === 'custom') {
+                customRow.classList.remove('hidden');
+                const w = Math.max(1, Number(document.getElementById('free-pomo-custom-work').value) || 20);
+                const b = Math.max(1, Number(document.getElementById('free-pomo-custom-break').value) || 5);
+                freePomoWorkSec = w * 60;
+                freePomoBreakSec = b * 60;
+            } else {
+                customRow.classList.add('hidden');
+                const [w, b] = val.split('-').map(Number);
+                freePomoWorkSec = (w || 25) * 60;
+                freePomoBreakSec = (b || 5) * 60;
+            }
+
+            freePomoPhase = 'work';
+            freePomoRemainingSec = freePomoWorkSec;
+            document.getElementById('free-pomo-finished-banner').classList.add('hidden');
+            saveCurrentFreeTimerState();
+            updateFreeTimerUI();
+        }
+
+        function toggleFreeTimer() {
+            if (freeTimerRunning) {
+                pauseFreeTimer(true);
+            } else {
+                startFreeTimer();
+            }
+        }
+
+        function startFreeTimer() {
+            unlockAudioContext();
+            freeTimerRunning = true;
+            document.getElementById('free-pomo-finished-banner').classList.add('hidden');
+
+            if (freeClockMode === 'stopwatch') {
+                freeSwStartTimestamp = Date.now();
+                updateFreeTimerHeader('RAPEANDO EN VIVO', true);
+            } else {
+                if (freePomoRemainingSec <= 0) {
+                    freePomoRemainingSec = freePomoPhase === 'work' ? freePomoWorkSec : freePomoBreakSec;
+                }
+                freePomoEndTimestamp = Date.now() + (freePomoRemainingSec * 1000);
+                if (freePomoPhase === 'work') {
+                    freePomoPhaseStartTimestamp = Date.now();
+                }
+                updateFreeTimerHeader(freePomoPhase === 'work' ? 'POMODORO · RAPEANDO' : 'POMODORO · EN PAUSA', true);
+            }
+
+            updateFreeTimerUI();
+
+            freeTimerInterval = setInterval(() => {
+                tickFreeTimer();
+            }, 250);
+        }
+
+        function tickFreeTimer() {
+            if (!freeTimerRunning) return;
+
+            if (freeClockMode === 'stopwatch') {
+                updateFreeTimerUI();
+            } else {
+                const remaining = Math.max(0, Math.ceil((freePomoEndTimestamp - Date.now()) / 1000));
+                if (remaining !== freePomoRemainingSec) {
+                    freePomoRemainingSec = remaining;
+                    updateFreeTimerUI();
+                }
+                if (freePomoRemainingSec <= 0) {
+                    onFreePomodoroPhaseCompleted();
+                }
+            }
+        }
+
+        function pauseFreeTimer(syncMinutes = true) {
+            if (freeTimerRunning) {
+                if (freeClockMode === 'stopwatch' && freeSwStartTimestamp) {
+                    freeSwAccumulatedMs += Math.max(0, Date.now() - freeSwStartTimestamp);
+                } else if (freeClockMode === 'pomodoro') {
+                    if (freePomoEndTimestamp) {
+                        freePomoRemainingSec = Math.max(0, Math.ceil((freePomoEndTimestamp - Date.now()) / 1000));
+                    }
+                    if (freePomoPhase === 'work' && freePomoPhaseStartTimestamp) {
+                        freePomoAccumulatedWorkMs += Math.max(0, Date.now() - freePomoPhaseStartTimestamp);
+                    }
+                }
+            }
+
+            freeTimerRunning = false;
+            freeSwStartTimestamp = null;
+            freePomoEndTimestamp = null;
+            freePomoPhaseStartTimestamp = null;
+
+            if (freeTimerInterval) {
+                clearInterval(freeTimerInterval);
+                freeTimerInterval = null;
+            }
+
+            document.title = BASE_DOC_TITLE;
+            saveCurrentFreeTimerState();
+            updateFreeTimerUI();
+
+            if (syncMinutes) {
+                syncFreeElapsedToInput(false);
+                updateFreeTimerHeader('PAUSADO', false);
+            }
+        }
+
+        function resetFreeTimer() {
+            pauseFreeTimer(false);
+            if (freeClockMode === 'stopwatch') {
+                freeSwAccumulatedMs = 0;
+            } else {
+                freePomoPhase = 'work';
+                freePomoRemainingSec = freePomoWorkSec;
+                freePomoRoundsCompleted = 0;
+                freePomoAccumulatedWorkMs = 0;
+                document.getElementById('free-pomo-finished-banner').classList.add('hidden');
+            }
+            saveCurrentFreeTimerState();
+            updateFreeTimerUI();
+            updateFreeTimerHeader('MODO LIBRE · LISTO', false);
+        }
+
+        function onFreePomodoroPhaseCompleted() {
+            // Calcular cuánto tiempo real de trabajo transcurrió (incluyendo si la pantalla estuvo apagada)
+            if (freePomoPhase === 'work' && freePomoPhaseStartTimestamp) {
+                const actualWorkedMs = Math.min(freePomoWorkSec * 1000, Math.max(0, Date.now() - freePomoPhaseStartTimestamp));
+                freePomoAccumulatedWorkMs += actualWorkedMs;
+                freePomoRoundsCompleted++;
+            }
+
+            freeTimerRunning = false;
+            freePomoEndTimestamp = null;
+            freePomoPhaseStartTimestamp = null;
+            if (freeTimerInterval) {
+                clearInterval(freeTimerInterval);
+                freeTimerInterval = null;
+            }
+            document.title = BASE_DOC_TITLE;
+
+            playAlarmSound();
+            syncFreeElapsedToInput(false);
+
+            const finishedWasWork = freePomoPhase === 'work';
+            freePomoPhase = finishedWasWork ? 'break' : 'work';
+            freePomoRemainingSec = finishedWasWork ? freePomoBreakSec : freePomoWorkSec;
+
+            saveCurrentFreeTimerState();
+            updateFreeTimerUI();
+            updateFreeTimerHeader('BLOQUE TERMINADO', false);
+
+            const banner = document.getElementById('free-pomo-finished-banner');
+            const bannerText = document.getElementById('free-pomo-finished-text');
+            bannerText.textContent = finishedWasWork
+                ? `🔔 ¡Ronda completada! Pulsa para iniciar pausa (${Math.round(freePomoBreakSec / 60)}m):`
+                : `🔔 ¡Pausa terminada! Pulsa para volver a rapear (${Math.round(freePomoWorkSec / 60)}m):`;
+            banner.classList.remove('hidden');
+            showToast(finishedWasWork ? '🔔 ¡Ronda libre completada!' : '🔔 ¡Pausa terminada! Listo para rapear.', '🍅');
+        }
+
+        function skipFreePomodoroPhase() {
+            if (freeTimerRunning) pauseFreeTimer(true);
+            stopAlarmAudio();
+            document.getElementById('free-pomo-finished-banner').classList.add('hidden');
+
+            freePomoPhase = freePomoPhase === 'work' ? 'break' : 'work';
+            freePomoRemainingSec = freePomoPhase === 'work' ? freePomoWorkSec : freePomoBreakSec;
+
+            saveCurrentFreeTimerState();
+            updateFreeTimerUI();
+            updateFreeTimerHeader('MODO LIBRE · LISTO', false);
+        }
+
+        function getFreeElapsedTotalMs() {
+            const liveSwMs = (freeTimerRunning && freeClockMode === 'stopwatch' && freeSwStartTimestamp)
+                ? Math.max(0, Date.now() - freeSwStartTimestamp)
+                : 0;
+            const livePomoMs = (freeTimerRunning && freeClockMode === 'pomodoro' && freePomoPhase === 'work' && freePomoPhaseStartTimestamp)
+                ? Math.max(0, Date.now() - freePomoPhaseStartTimestamp)
+                : 0;
+            return freeSwAccumulatedMs + liveSwMs + freePomoAccumulatedWorkMs + livePomoMs;
+        }
+
+        function syncFreeElapsedToInput(markCompleted = false) {
+            const totalMs = getFreeElapsedTotalMs();
+            const totalSec = Math.floor(totalMs / 1000);
+            if (totalSec >= 10) {
+                const mins = Math.max(1, Math.round(totalSec / 60));
+                document.getElementById('field-libre-min').value = mins;
+                if (markCompleted) {
+                    document.getElementById('field-estado').value = 'completado';
+                }
+                return mins;
+            }
+            return Number(document.getElementById('field-libre-min').value || 0);
+        }
+
+        function finishFreeTimerSession() {
+            pauseFreeTimer(false);
+            stopAlarmAudio();
+            const mins = syncFreeElapsedToInput(true);
+            updateFreeTimerHeader('SESIÓN LIBRE VOLCADA', false);
+            showToast(`🎤 ¡Sesión Libre volcada (${mins} min) y marcada como completada!`, '✓');
+        }
+
+        function updateFreeTimerHeader(text, isRunning) {
+            const label = document.getElementById('free-timer-status');
+            const dot = document.getElementById('free-timer-dot');
+            if (!label || !dot) return;
+            label.textContent = text;
+            dot.className = `w-2 h-2 rounded-full bg-purple-600 ${isRunning ? 'animate-ping' : ''}`;
+        }
+
+        function updateFreeTimerUI() {
+            // 1. Stopwatch UI
+            const swTotalMs = freeSwAccumulatedMs + (freeTimerRunning && freeSwStartTimestamp ? Math.max(0, Date.now() - freeSwStartTimestamp) : 0);
+            const swSec = Math.floor(swTotalMs / 1000);
+            const swFormatted = formatFreeStopwatch(swSec);
+            const swDisp = document.getElementById('free-stopwatch-display');
+            if (swDisp) swDisp.textContent = swFormatted;
+
+            const swIcon = document.getElementById('free-sw-play-icon');
+            const swLbl = document.getElementById('free-sw-play-label');
+            if (swIcon && swLbl) {
+                if (freeTimerRunning && freeClockMode === 'stopwatch') {
+                    swIcon.textContent = '⏸';
+                    swLbl.textContent = 'Pausar';
+                } else if (swSec > 0) {
+                    swIcon.textContent = '▶';
+                    swLbl.textContent = 'Reanudar';
+                } else {
+                    swIcon.textContent = '▶';
+                    swLbl.textContent = 'Iniciar';
+                }
+            }
+
+            // 2. Pomodoro UI
+            const pMins = Math.floor(freePomoRemainingSec / 60);
+            const pSecs = freePomoRemainingSec % 60;
+            const pFormatted = `${String(pMins).padStart(2, '0')}:${String(pSecs).padStart(2, '0')}`;
+            const pDisp = document.getElementById('free-pomo-display');
+            if (pDisp) pDisp.textContent = pFormatted;
+
+            const phaseLbl = document.getElementById('free-pomo-phase-label');
+            if (phaseLbl) {
+                phaseLbl.textContent = freePomoPhase === 'work'
+                    ? `Ronda ${freePomoRoundsCompleted + 1} · Rapear`
+                    : `Pausa · Descanso`;
+                phaseLbl.className = freePomoPhase === 'work'
+                    ? 'text-[11px] font-medium text-purple-700 mt-1'
+                    : 'text-[11px] font-medium text-emerald-700 mt-1';
+            }
+
+            const totalPomoWorkMins = Math.round(getFreeElapsedTotalMs() / 60000);
+            const roundsBadge = document.getElementById('free-pomo-rounds-badge');
+            if (roundsBadge) {
+                roundsBadge.textContent = `Rondas: ${freePomoRoundsCompleted} · Acum: ${totalPomoWorkMins}m`;
+            }
+
+            const pRing = document.getElementById('free-pomo-ring');
+            if (pRing) {
+                const totalPhaseSec = freePomoPhase === 'work' ? freePomoWorkSec : freePomoBreakSec;
+                const ratio = totalPhaseSec > 0 ? (freePomoRemainingSec / totalPhaseSec) : 0;
+                pRing.style.strokeDashoffset = FREE_POMO_CIRCUMFERENCE * (1 - ratio);
+                pRing.style.stroke = freePomoPhase === 'work' ? '#9333ea' : '#10b981';
+            }
+
+            const pPlay = document.getElementById('free-pomo-icon-play');
+            const pPause = document.getElementById('free-pomo-icon-pause');
+            if (pPlay && pPause) {
+                pPlay.classList.toggle('hidden', freeTimerRunning && freeClockMode === 'pomodoro');
+                pPause.classList.toggle('hidden', !(freeTimerRunning && freeClockMode === 'pomodoro'));
+            }
+
+            // 3. Document title cuando corre en segundo plano
+            if (freeTimerRunning) {
+                if (freeClockMode === 'stopwatch') {
+                    document.title = `${swFormatted} · Libre | EDR`;
+                } else {
+                    document.title = `${pFormatted} · ${freePomoPhase === 'work' ? 'Rap Libre' : 'Pausa'} | EDR`;
+                }
+            }
+        }
+
+        // Sincronizar ambos relojes al volver de pantalla bloqueada / pestaña oculta
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                if (freeTimerRunning) tickFreeTimer();
+                if (studyTimerRunning && phaseEndTimestamp) {
+                    const remaining = Math.max(0, Math.ceil((phaseEndTimestamp - Date.now()) / 1000));
+                    phaseRemainingSeconds = remaining;
+                    updateTimerVisualRing();
+                    saveCurrentSessionTimerState();
+                    if (phaseRemainingSeconds <= 0) onStudyPhaseCompleted();
+                }
+            }
+        });
+
+        // ============================================================================
+        // 7C. DICTADO POR VOZ EN VIVO (Web Speech API)
+        // ============================================================================
+        let speechRecognition = null;
+        let isVoiceDictating = false;
+
+        const SPEECH_LANG_MAP = {
+            ES: 'es-ES',
+            IT: 'it-IT',
+            EN: 'en-US',
+            PT: 'pt-BR',
+            FR: 'fr-FR',
+            DE: 'de-DE',
+            CA: 'ca-ES',
+            GL: 'gl-ES',
+            EU: 'eu-ES'
+        };
+
+        function getSpeechLangForCurrentSession() {
+            const code = (document.getElementById('field-idioma')?.value || 'ES').toUpperCase();
+            if (SPEECH_LANG_MAP[code]) return SPEECH_LANG_MAP[code];
+            return code.length === 2 ? `${code.toLowerCase()}-${code}` : 'es-ES';
+        }
+
+        function setVoiceDictationUI(active, langTag = 'es-ES') {
+            isVoiceDictating = active;
+            const btn = document.getElementById('btn-voice-dictation');
+            const dot = document.getElementById('voice-btn-dot');
+            const lbl = document.getElementById('voice-btn-label');
+            const interimBox = document.getElementById('voice-interim-box');
+            const tagEl = document.getElementById('voice-lang-tag');
+
+            if (!btn || !dot || !lbl || !interimBox) return;
+
+            if (active) {
+                btn.className = 'inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-rose-600 text-white border border-rose-700 shadow-sm transition';
+                dot.className = 'w-2 h-2 rounded-full bg-white animate-ping';
+                lbl.textContent = '⏹ Detener dictado';
+                if (tagEl) tagEl.textContent = langTag;
+                document.getElementById('voice-interim-text').textContent = 'Habla ahora...';
+                interimBox.classList.remove('hidden');
+            } else {
+                btn.className = 'inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 transition';
+                dot.className = 'w-2 h-2 rounded-full bg-purple-600';
+                lbl.textContent = '🎤 Dictar por voz';
+                interimBox.classList.add('hidden');
+            }
+        }
+
+        function stopVoiceDictation() {
+            if (speechRecognition) {
+                try { speechRecognition.stop(); } catch (e) {}
+                speechRecognition = null;
+            }
+            setVoiceDictationUI(false);
+        }
+
+        function toggleVoiceDictation() {
+            if (isVoiceDictating) {
+                stopVoiceDictation();
+                return;
+            }
+
+            const SpeechRecClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecClass) {
+                showToast('Tu navegador no soporta dictado por voz. Usa Chrome o Edge.', '⚠️');
+                return;
+            }
+
+            const langTag = getSpeechLangForCurrentSession();
+            const rec = new SpeechRecClass();
+            rec.lang = langTag;
+            rec.continuous = true;
+            rec.interimResults = true;
+
+            rec.onstart = () => {
+                setVoiceDictationUI(true, langTag);
+            };
+
+            rec.onresult = (event) => {
+                let interim = '';
+                let finalChunk = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalChunk += transcript;
+                    } else {
+                        interim += transcript;
+                    }
+                }
+
+                if (finalChunk.trim()) {
+                    const textarea = document.getElementById('field-libre-percepciones');
+                    const cur = textarea.value;
+                    const needsSpace = cur.length > 0 && !/[\s\n]$/.test(cur);
+                    textarea.value = cur + (needsSpace ? ' ' : '') + finalChunk.trim();
+                }
+
+                const interimEl = document.getElementById('voice-interim-text');
+                if (interimEl) {
+                    interimEl.textContent = interim.trim() || 'Escuchando...';
+                }
+            };
+
+            rec.onerror = (event) => {
+                console.warn('[SpeechRecognition Error]', event.error);
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    showToast('Permiso de micrófono bloqueado. Habilítalo en tu navegador.', '⚠️');
+                } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
+                    showToast(`Error de dictado: ${event.error}`, '⚠️');
+                }
+                stopVoiceDictation();
+            };
+
+            rec.onend = () => {
+                speechRecognition = null;
+                setVoiceDictationUI(false);
+            };
+
+            speechRecognition = rec;
+            try {
+                rec.start();
+            } catch (e) {
+                speechRecognition = null;
+                setVoiceDictationUI(false);
+                showToast('No se pudo iniciar el micrófono.', '⚠️');
+            }
+        }
+
         // ============================================================================
         // 8. DRAWER MULTI-SESIÓN DEL DÍA Y CRONÓMETRO CRONOPISTAS
         // ============================================================================
@@ -2775,7 +3607,7 @@
                 btn.type = 'button';
                 const isActive = idx === activeIdx;
                 const lang = s.idioma || 'ES';
-                const modIcon = s.modalidad === 'grupal' ? '🎙️' : (s.modalidad === 'descanso' ? '🌿' : '🎧');
+                const modIcon = s.modalidad === 'grupal' ? '🎙️' : (s.modalidad === 'descanso' ? '🌿' : (s.modalidad === 'libre' ? '🎤' : '🎧'));
                 const check = s.estado === 'completado' ? ' ✓' : '';
 
                 btn.className = isActive
@@ -2806,6 +3638,8 @@
             // Autosave silencioso de la sesión actual para no perder cambios al cambiar pestaña
             saveCurrentSession({ silent: true });
             pauseStudyTimer();
+            pauseFreeTimer(true);
+            stopVoiceDictation();
             stopAlarmAudio();
             resetCronopistasTimer();
 
@@ -2820,6 +3654,8 @@
             // Autosave de la Sesión 1 (incluso si era borrador no guardado) antes de agregar la Sesión 2
             saveCurrentSession({ silent: true });
             pauseStudyTimer();
+            pauseFreeTimer(true);
+            stopVoiceDictation();
             stopAlarmAudio();
             resetCronopistasTimer();
 
@@ -2883,6 +3719,11 @@
             document.getElementById('field-infranich-aspecto').value = s.aspecto_profundizado || '';
             document.getElementById('field-infranich-notas').value = s.notas_internas || '';
 
+            // Campos Modalidad Libre
+            document.getElementById('field-libre-min').value = s.modalidad === 'libre' ? (s.min_reales ?? 0) : 0;
+            document.getElementById('field-libre-percepciones').value = s.percepciones_libre || '';
+            initFreeTimerForSession(s);
+
             // Campos Descanso
             document.getElementById('field-descanso-nota').value = s.nota_descanso_activo || 'Descanso activo completo: lectura / escucha';
 
@@ -2904,6 +3745,8 @@
 
         function closeDayDrawer() {
             pauseStudyTimer();
+            pauseFreeTimer(true);
+            stopVoiceDictation();
             stopAlarmAudio();
             resetCronopistasTimer();
             document.getElementById('day-drawer').classList.add('translate-x-full');
@@ -2913,6 +3756,7 @@
         function onModalidadChange() {
             const mod = document.getElementById('field-modalidad').value;
             document.getElementById('section-solitario').classList.toggle('hidden', mod !== 'solitario');
+            document.getElementById('section-libre').classList.toggle('hidden', mod !== 'libre');
             document.getElementById('section-grupal').classList.toggle('hidden', mod !== 'grupal');
             document.getElementById('section-descanso').classList.toggle('hidden', mod !== 'descanso');
 
@@ -2920,11 +3764,17 @@
             if (mod === 'descanso') {
                 estadoEl.value = 'descanso';
                 pauseStudyTimer();
+                pauseFreeTimer(true);
+                stopVoiceDictation();
             } else {
                 if (estadoEl.value === 'descanso') {
                     estadoEl.value = 'pendiente';
                 }
                 if (mod !== 'solitario') pauseStudyTimer();
+                if (mod !== 'libre') {
+                    pauseFreeTimer(true);
+                    stopVoiceDictation();
+                }
             }
         }
 
@@ -3040,6 +3890,23 @@
                     plan_incorporacion: document.getElementById('field-incorporacion-nota').value.trim(),
                     plan_fortalecimiento: document.getElementById('field-fortalecimiento-nota').value.trim(),
                     material_link: document.getElementById('field-link').value.trim()
+                };
+            } else if (mod === 'libre') {
+                if (freeTimerRunning) pauseFreeTimer(true);
+                stopVoiceDictation();
+                const libreMin = Math.max(0, Number(document.getElementById('field-libre-min').value) || 0);
+                const finalLibreEstado = (libreMin > 0 && baseSession.estado === 'pendiente') ? 'completado' : baseSession.estado;
+                if (finalLibreEstado !== baseSession.estado) {
+                    document.getElementById('field-estado').value = finalLibreEstado;
+                }
+                builtSession = {
+                    ...baseSession,
+                    estado: finalLibreEstado,
+                    min_planificados: 0,
+                    min_reales: libreMin,
+                    modo_reloj_libre: freeClockMode,
+                    rondas_pomodoro_libre: freeClockMode === 'pomodoro' ? freePomoRoundsCompleted : 0,
+                    percepciones_libre: document.getElementById('field-libre-percepciones').value.trim()
                 };
             } else if (mod === 'grupal') {
                 const gMin = Number(document.getElementById('field-grupal-min').value) || 120;
@@ -3304,6 +4171,7 @@ Por favor, analiza estos datos buscando patrones ocultos, evolución respecto a 
 2. **Resistencia en Cronopistas:** Analiza los segundos sostenidos antes de consultar Cronopistas (máx 40s) en este idioma. ¿Hay fatiga acumulada entre sesiones del mismo día o de la semana?
 3. **Fatiga Dinámica por Sesión y Modo Recuperación:** Cruza los niveles de fatiga mental y RPE por sesión (incluyendo días con doble entrenamiento) con las zonas mentales (confort/aprendizaje/bloqueo) y fricciones de disociación.
 4. **Diagnóstico y Directriz Táctica:** Lee mis notas de "error_principal", dame 3 conclusiones clave y una directriz táctica concreta para mi próxima semana en **${langLabel}**.
+5. **Sesiones en Modalidad Libre (Rapear y ya):** Si hay registros con \`modalidad: "libre"\`, tómalos como espacio de disfrute y fluidez orgánica (sin penalizarlos como incumplimiento de bloques EDR) y cruza \`percepciones_libre\` con mi evolución técnica.
 
 --- DATOS DE ENTRENAMIENTO SEMANAL (${langCode} · JSON) ---
 ${JSON.stringify(payload, null, 2)}`;
@@ -3376,7 +4244,7 @@ ${JSON.stringify(payload, null, 2)}`;
                 'Hora_Inicio', 'Hora_Fin', 'Min_Planificados', 'Min_Reales', 'Fatiga', 'RPE', 'Modo_Recuperacion',
                 'Cableado_m', 'Incorporacion_m', 'Fortalecimiento_m', 'Elongacion_m',
                 'Ejercicios_EDR', 'Nota_Incorporacion', 'Nota_Fortalecimiento', 'Infranich_Tema',
-                'Cronopistas_s', 'Friccion', 'Zona_Mental', 'Error_Principal'
+                'Percepciones_Libre', 'Cronopistas_s', 'Friccion', 'Zona_Mental', 'Error_Principal'
             ];
             const rows = [headers.join(',')];
             const csvCell = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
@@ -3404,6 +4272,7 @@ ${JSON.stringify(payload, null, 2)}`;
                         csvCell(s.plan_incorporacion || ''),
                         csvCell(s.plan_fortalecimiento || ''),
                         csvCell(s.clase_infranich_tema || ''),
+                        csvCell(s.percepciones_libre || ''),
                         s.segundos_resistencia_cronopistas ?? '',
                         csvCell(s.friccion_disociacion || ''),
                         s.zona_mental || '',
