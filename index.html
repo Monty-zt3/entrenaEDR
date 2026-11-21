@@ -292,19 +292,19 @@
         <!-- Grid Principal: Calendario Perpetuo + Gráfico de Distribución -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            <!-- Calendario Perpetuo (8 columnas en desktop) -->
+            <!-- Calendario Perpetuo: Vista Semanal y Vista Mensual (8 columnas en desktop) -->
             <div class="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 shadow-sm p-4 sm:p-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                     <div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <h3 class="text-sm font-semibold text-slate-900">Calendario de Entrenamiento Perpetuo</h3>
-                            <!-- Selector de Vista de Calendario: Clásico vs Multi-Sesión -->
-                            <div class="inline-flex items-center bg-sand-100 p-0.5 rounded-lg border border-slate-200/80" title="Cambiar diseño visual del calendario">
-                                <button type="button" id="cal-view-classic-btn" onclick="setCalendarViewMode('classic')" class="text-[11px] font-semibold px-2 py-0.5 rounded-md transition bg-white text-slate-900 shadow-sm">
-                                    ◻ Clásico
+                            <h3 class="text-sm font-semibold text-slate-900">Calendario de Entrenamiento</h3>
+                            <!-- Selector de Vista: Semanal vs Mensual -->
+                            <div class="inline-flex items-center bg-sand-100 p-0.5 rounded-lg border border-slate-200/80" title="Alternar entre vista semanal y vista mensual">
+                                <button type="button" id="cal-view-week-btn" onclick="setCalendarViewMode('week')" class="text-[11px] font-semibold px-2.5 py-1 rounded-md transition bg-white text-slate-900 shadow-sm">
+                                    📅 Semanal
                                 </button>
-                                <button type="button" id="cal-view-multi-btn" onclick="setCalendarViewMode('multi')" class="text-[11px] font-medium px-2 py-0.5 rounded-md transition text-slate-600 hover:text-slate-900">
-                                    ☰ Multi-Sesión
+                                <button type="button" id="cal-view-month-btn" onclick="setCalendarViewMode('month')" class="text-[11px] font-medium px-2.5 py-1 rounded-md transition text-slate-600 hover:text-slate-900">
+                                    🗓️ Mensual
                                 </button>
                             </div>
                         </div>
@@ -320,8 +320,21 @@
                     </div>
                 </div>
 
-                <!-- Cabecera días de la semana -->
-                <div class="grid grid-cols-7 gap-1.5 sm:gap-2 text-center mb-2">
+                <!-- Barra de Navegación de Semana (visible en Vista Semanal) -->
+                <div id="weekly-nav-bar" class="hidden mb-3 bg-sand-50 border border-slate-200/80 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                    <button type="button" onclick="shiftActiveWeek(-1)" class="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white px-2.5 py-1 rounded-lg transition">
+                        <span>‹</span>
+                        <span class="hidden sm:inline">Semana anterior</span>
+                    </button>
+                    <span id="weekly-range-label" class="text-xs font-mono font-semibold text-slate-800">Semana del 09/11 al 15/11</span>
+                    <button type="button" onclick="shiftActiveWeek(1)" class="inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-white px-2.5 py-1 rounded-lg transition">
+                        <span class="hidden sm:inline">Semana siguiente</span>
+                        <span>›</span>
+                    </button>
+                </div>
+
+                <!-- Cabecera días de la semana (visible en Vista Mensual) -->
+                <div id="calendar-weekdays-header" class="grid grid-cols-7 gap-1.5 sm:gap-2 text-center mb-2">
                     <div class="text-[11px] font-semibold text-slate-400 uppercase py-1">Lun</div>
                     <div class="text-[11px] font-semibold text-slate-400 uppercase py-1">Mar</div>
                     <div class="text-[11px] font-semibold text-slate-400 uppercase py-1">Mié</div>
@@ -1248,8 +1261,8 @@
         let activeSessionIndex = 0;
         let statsScope = 'week';
         let globalLanguageFilter = 'ALL';
-        const CAL_VIEW_STORAGE_KEY = 'edr_freestyle_cal_view_v1';
-        let calendarViewMode = localStorage.getItem(CAL_VIEW_STORAGE_KEY) || 'classic'; // 'classic' | 'multi'
+        const CAL_VIEW_STORAGE_KEY = 'edr_freestyle_cal_view_v2';
+        let calendarViewMode = localStorage.getItem(CAL_VIEW_STORAGE_KEY) || 'week'; // 'week' | 'month'
 
         // Estado temporal de selecciones de ejercicios en el formulario abierto
         let formCatalogState = {
@@ -1996,23 +2009,39 @@
         // 5. RENDERIZADO DEL CALENDARIO PERPETUO (MULTI-SESIÓN + IDIOMAS)
         // ============================================================================
         function syncCalendarViewButtons() {
-            const classicBtn = document.getElementById('cal-view-classic-btn');
-            const multiBtn = document.getElementById('cal-view-multi-btn');
-            if (!classicBtn || !multiBtn) return;
+            const weekBtn = document.getElementById('cal-view-week-btn');
+            const monthBtn = document.getElementById('cal-view-month-btn');
+            const weeklyNav = document.getElementById('weekly-nav-bar');
+            const weekdaysHdr = document.getElementById('calendar-weekdays-header');
+            if (!weekBtn || !monthBtn) return;
 
-            classicBtn.className = calendarViewMode === 'classic'
-                ? 'text-[11px] font-semibold px-2 py-0.5 rounded-md transition bg-white text-slate-900 shadow-sm'
-                : 'text-[11px] font-medium px-2 py-0.5 rounded-md transition text-slate-600 hover:text-slate-900';
-            multiBtn.className = calendarViewMode === 'multi'
-                ? 'text-[11px] font-semibold px-2 py-0.5 rounded-md transition bg-white text-slate-900 shadow-sm'
-                : 'text-[11px] font-medium px-2 py-0.5 rounded-md transition text-slate-600 hover:text-slate-900';
+            const isWeek = calendarViewMode === 'week';
+            weekBtn.className = isWeek
+                ? 'text-[11px] font-semibold px-2.5 py-1 rounded-md transition bg-white text-slate-900 shadow-sm'
+                : 'text-[11px] font-medium px-2.5 py-1 rounded-md transition text-slate-600 hover:text-slate-900';
+            monthBtn.className = !isWeek
+                ? 'text-[11px] font-semibold px-2.5 py-1 rounded-md transition bg-white text-slate-900 shadow-sm'
+                : 'text-[11px] font-medium px-2.5 py-1 rounded-md transition text-slate-600 hover:text-slate-900';
+
+            if (weeklyNav) weeklyNav.classList.toggle('hidden', !isWeek);
+            if (weekdaysHdr) weekdaysHdr.classList.toggle('hidden', isWeek);
         }
 
         function setCalendarViewMode(mode) {
-            calendarViewMode = mode === 'multi' ? 'multi' : 'classic';
+            calendarViewMode = mode === 'month' ? 'month' : 'week';
             try { localStorage.setItem(CAL_VIEW_STORAGE_KEY, calendarViewMode); } catch (e) {}
             syncCalendarViewButtons();
             renderCalendar();
+        }
+
+        function shiftActiveWeek(deltaWeeks) {
+            const cur = fromISO(selectedDateStr);
+            cur.setDate(cur.getDate() + deltaWeeks * 7);
+            selectedDateStr = toISO(cur);
+            currentYear = cur.getFullYear();
+            currentMonth = cur.getMonth();
+            renderCalendar();
+            updateDashboard();
         }
 
         function renderCalendar() {
@@ -2022,18 +2051,142 @@
             label.textContent = `${MONTH_NAMES[currentMonth]} ${currentYear}`;
             grid.innerHTML = '';
 
+            const todayISO = toISO(new Date());
+
+            if (calendarViewMode === 'week') {
+                // ============================================================
+                // VISTA SEMANAL (Lunes a Domingo de la semana activa)
+                // ============================================================
+                grid.className = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-7 gap-2.5';
+                const weekDates = getFilteredDates('week', selectedDateStr);
+                const rangeLabel = document.getElementById('weekly-range-label');
+                if (rangeLabel && weekDates.length === 7) {
+                    rangeLabel.textContent = `Semana: ${formatDisplayDate(weekDates[0])} – ${formatDisplayDate(weekDates[6])}`;
+                }
+
+                weekDates.forEach(iso => {
+                    const dateObj = fromISO(iso);
+                    const d = dateObj.getDate();
+                    const dayShort = DAY_NAMES_FULL[dateObj.getDay()].slice(0, 3);
+                    const isSunday = dateObj.getDay() === 0;
+                    const sessions = getSessionsForDate(iso, true);
+
+                    const cell = document.createElement('button');
+                    cell.type = 'button';
+                    cell.onclick = () => openDayDrawer(iso);
+
+                    const isSelected = iso === selectedDateStr;
+                    const isToday = iso === todayISO;
+                    const ringClass = isSelected ? 'ring-2 ring-sage-600' : (isToday ? 'ring-1 ring-slate-900' : '');
+
+                    let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
+                    if (sessions.length > 0) {
+                        const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
+                        const hasGrupal = sessions.some(s => s.modalidad === 'grupal');
+                        const hasLibre = sessions.some(s => s.modalidad === 'libre');
+                        const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
+
+                        if (allDescanso) bgClass = 'bg-sand-100/80 border-slate-200';
+                        else if (hasRecovery) bgClass = 'bg-amber-50/50 border-amber-200 hover:border-amber-400';
+                        else if (hasLibre && sessions.length === 1) bgClass = 'bg-purple-50/50 border-purple-200 hover:border-purple-400';
+                        else if (hasGrupal && sessions.length === 1) bgClass = 'bg-indigo-50/50 border-indigo-200 hover:border-indigo-400';
+                        else bgClass = 'bg-sage-50/40 border-sage-200 hover:border-sage-500';
+                    } else if (isSunday) {
+                        bgClass = 'bg-sand-50/70 border-slate-200/60';
+                    }
+
+                    let cardsHTML = '';
+                    if (sessions.length === 0) {
+                        cardsHTML = `
+                            <div class="flex-1 flex flex-col items-center justify-center text-center py-4 text-slate-400">
+                                <span class="text-[11px]">${isSunday ? '🌿 Descanso' : 'Sin sesiones'}</span>
+                                <span class="text-[10px] text-sage-700 font-medium mt-1">+ Planificar</span>
+                            </div>
+                        `;
+                    } else {
+                        cardsHTML = `<div class="space-y-1.5 w-full flex-1">` + sessions.map(s => {
+                            const lang = escapeHtml(s.idioma || 'ES');
+                            const check = s.estado === 'completado' ? '✓ ' : '';
+                            if (s.modalidad === 'descanso' || s.estado === 'descanso') {
+                                return `
+                                    <div class="p-2 rounded-lg bg-white/90 border border-slate-200/80 text-left space-y-0.5">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-semibold text-slate-600">🌿 Descanso</span>
+                                            <span class="font-mono font-bold text-slate-400">${lang}</span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 line-clamp-2">${escapeHtml(s.nota_descanso_activo || 'Descanso activo')}</p>
+                                    </div>
+                                `;
+                            } else if (s.modalidad === 'libre') {
+                                const mins = Number(s.min_reales || 0);
+                                const perc = (s.percepciones_libre || '').trim();
+                                return `
+                                    <div class="p-2 rounded-lg bg-purple-100/80 border border-purple-200/80 text-left space-y-0.5">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-bold text-purple-950">${check}🎤 Libre</span>
+                                            <span class="font-mono font-bold text-purple-800">${lang} · ${mins}m</span>
+                                        </div>
+                                        ${perc ? `<p class="text-[10px] text-purple-900/80 line-clamp-2">${escapeHtml(perc)}</p>` : ''}
+                                    </div>
+                                `;
+                            } else if (s.modalidad === 'grupal') {
+                                const mins = s.min_reales || s.min_planificados || 120;
+                                const tema = (s.clase_infranich_tema || '').trim();
+                                return `
+                                    <div class="p-2 rounded-lg bg-indigo-100/80 border border-indigo-200/80 text-left space-y-0.5">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-bold text-indigo-950">${check}🎙️ Infranich</span>
+                                            <span class="font-mono font-bold text-indigo-800">${lang} · ${mins}m</span>
+                                        </div>
+                                        ${tema ? `<p class="text-[10px] text-indigo-900/80 line-clamp-2">${escapeHtml(tema)}</p>` : ''}
+                                    </div>
+                                `;
+                            } else {
+                                const isRec = Number(s.fatiga) >= 7 || s.modo_recuperacion_activo;
+                                const mins = s.min_reales > 0 ? s.min_reales : (s.min_planificados || 0);
+                                const boxCls = isRec ? 'bg-amber-100/80 border-amber-200/90 text-amber-950' : 'bg-white/95 border-sage-200/90 text-slate-800';
+                                const res = s.resumen_ejercicios_edr || {};
+                                const snippet = (res.incorporacion && res.incorporacion !== 'No especificado')
+                                    ? res.incorporacion
+                                    : (s.plan_incorporacion || s.plan_fortalecimiento || '');
+                                return `
+                                    <div class="p-2 rounded-lg border ${boxCls} text-left space-y-0.5">
+                                        <div class="flex items-center justify-between text-[10px]">
+                                            <span class="font-bold">${check}${isRec ? '🟡 Recup.' : '🎧 EDR'}</span>
+                                            <span class="font-mono font-bold">${lang} · ${mins}m</span>
+                                        </div>
+                                        ${snippet ? `<p class="text-[10px] opacity-80 line-clamp-2">${escapeHtml(snippet)}</p>` : ''}
+                                    </div>
+                                `;
+                            }
+                        }).join('') + `</div>`;
+                    }
+
+                    cell.className = `calendar-day min-h-[160px] xl:min-h-[235px] p-2.5 rounded-xl border text-left flex flex-col justify-between gap-2 ${bgClass} ${ringClass}`;
+                    cell.innerHTML = `
+                        <div class="flex items-center justify-between w-full pb-1.5 border-b border-slate-200/60">
+                            <span class="text-[11px] font-semibold uppercase ${isSunday ? 'text-sage-700' : 'text-slate-500'}">${dayShort}</span>
+                            <span class="text-xs font-bold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-800'}">${String(d).padStart(2, '0')}</span>
+                        </div>
+                        ${cardsHTML}
+                    `;
+                    grid.appendChild(cell);
+                });
+                return;
+            }
+
+            // ================================================================
+            // VISTA MENSUAL (Cuadrícula completa del mes)
+            // ================================================================
+            grid.className = 'grid grid-cols-7 gap-1.5 sm:gap-2';
             const firstDay = new Date(currentYear, currentMonth, 1);
             const lastDay = new Date(currentYear, currentMonth + 1, 0);
             const startWeekday = (firstDay.getDay() + 6) % 7;
             const totalDays = lastDay.getDate();
-            const todayISO = toISO(new Date());
-            const isClassic = calendarViewMode === 'classic';
 
             for (let i = 0; i < startWeekday; i++) {
                 const empty = document.createElement('div');
-                empty.className = isClassic
-                    ? 'h-20 sm:h-24 rounded-xl bg-slate-50/50 border border-transparent'
-                    : 'h-24 sm:h-28 rounded-xl bg-slate-50/50 border border-transparent';
+                empty.className = 'h-24 sm:h-28 rounded-xl bg-slate-50/50 border border-transparent';
                 grid.appendChild(empty);
             }
 
@@ -2047,156 +2200,80 @@
                 cell.type = 'button';
                 cell.onclick = () => openDayDrawer(iso);
 
+                let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
+                let linesHTML = '';
+
+                if (sessions.length > 0) {
+                    const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
+                    const hasGrupal = sessions.some(s => s.modalidad === 'grupal');
+                    const hasLibre = sessions.some(s => s.modalidad === 'libre');
+                    const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
+
+                    if (allDescanso) {
+                        bgClass = 'bg-sand-100/80 border-slate-200 text-slate-600';
+                    } else if (hasRecovery) {
+                        bgClass = 'bg-amber-50/60 border-amber-200 hover:border-amber-400';
+                    } else if (hasLibre && sessions.length === 1) {
+                        bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
+                    } else if (hasGrupal && sessions.length === 1) {
+                        bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
+                    } else {
+                        bgClass = 'bg-sage-50/50 border-sage-200 hover:border-sage-500';
+                    }
+
+                    linesHTML = sessions.slice(0, 3).map(s => {
+                        const lang = escapeHtml(s.idioma || 'ES');
+                        const check = s.estado === 'completado' ? '✓' : '';
+                        if (s.modalidad === 'descanso' || s.estado === 'descanso') {
+                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-white/80 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200/80 truncate">
+                                <span class="font-mono font-bold text-slate-500">${lang}</span>
+                                <span class="truncate ml-1">Descanso</span>
+                            </div>`;
+                        } else if (s.modalidad === 'libre') {
+                            const mins = Number(s.min_reales || 0);
+                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-purple-100/90 text-purple-900 px-1.5 py-0.5 rounded truncate">
+                                <span class="font-mono font-bold">${lang}</span>
+                                <span class="font-mono truncate ml-1">${check}Libre${mins > 0 ? ' ' + mins + 'm' : ''}</span>
+                            </div>`;
+                        } else if (s.modalidad === 'grupal') {
+                            const mins = s.min_reales || s.min_planificados || 120;
+                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-indigo-100/80 text-indigo-900 px-1.5 py-0.5 rounded truncate">
+                                <span class="font-mono font-bold">${lang}</span>
+                                <span class="font-mono truncate ml-1">${check}Inf ${mins}m</span>
+                            </div>`;
+                        } else {
+                            const isRec = Number(s.fatiga) >= 7 || s.modo_recuperacion_activo;
+                            const mins = s.min_reales > 0 ? s.min_reales : (s.min_planificados || 0);
+                            const pillCls = isRec ? 'bg-amber-100/90 text-amber-900' : 'bg-sage-100/90 text-sage-900';
+                            return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] ${pillCls} px-1.5 py-0.5 rounded truncate">
+                                <span class="font-mono font-bold">${lang}</span>
+                                <span class="font-mono truncate ml-1">${check}${mins}m</span>
+                            </div>`;
+                        }
+                    }).join('');
+
+                    if (sessions.length > 3) {
+                        linesHTML += `<div class="text-[9px] font-mono text-slate-500 text-right">+${sessions.length - 3} más</div>`;
+                    }
+                } else if (isSunday) {
+                    bgClass = 'bg-sand-50/70 border-slate-200/50 text-slate-500';
+                    linesHTML = `<span class="text-[10px] text-slate-400 hidden sm:block">Descanso</span>`;
+                }
+
                 const isSelected = iso === selectedDateStr;
                 const isToday = iso === todayISO;
                 const ringClass = isSelected ? 'ring-2 ring-sage-600' : (isToday ? 'ring-1 ring-slate-900' : '');
 
-                if (isClassic) {
-                    // ============================================================
-                    // VISTA CLÁSICA (Estilo original compacto con punto superior)
-                    // ============================================================
-                    let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
-                    let badgeHTML = '';
-                    let footerHTML = '';
-                    let hasBloqueo = false;
-
-                    if (sessions.length > 0) {
-                        hasBloqueo = sessions.some(s => s.estado === 'bloqueo' || s.zona_mental === 'bloqueo');
-                        const primary = sessions[0];
-                        const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
-                        const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
-                        const extraTag = sessions.length > 1 ? ` · +${sessions.length - 1}` : '';
-
-                        if (allDescanso) {
-                            bgClass = 'bg-sand-100/80 border-slate-200 text-slate-600';
-                            badgeHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span>`;
-                            footerHTML = `<span class="text-[10px] text-slate-500 truncate block">Descanso${extraTag}</span>`;
-                        } else if (primary.modalidad === 'libre' && sessions.length === 1) {
-                            bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
-                            badgeHTML = `<span class="w-2 h-2 rounded-full bg-purple-500"></span>`;
-                            const mins = Number(primary.min_reales || 0);
-                            const statusIcon = primary.estado === 'completado' ? '✓ ' : '';
-                            footerHTML = `<span class="text-[10px] font-medium text-purple-800 truncate block">${statusIcon}Libre${mins > 0 ? ' ' + mins + 'm' : ''}</span>`;
-                        } else if (primary.modalidad === 'grupal' && sessions.length === 1) {
-                            bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
-                            badgeHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span>`;
-                            footerHTML = `<span class="text-[10px] font-medium text-indigo-700 truncate block">Infranich ${primary.min_reales || primary.min_planificados || 120}m</span>`;
-                        } else {
-                            if (hasRecovery) {
-                                bgClass = 'bg-amber-50/60 border-amber-200 hover:border-amber-400';
-                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span>`;
-                            } else if (primary.modalidad === 'libre') {
-                                bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
-                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-purple-500"></span>`;
-                            } else if (primary.modalidad === 'grupal') {
-                                bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
-                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-indigo-500"></span>`;
-                            } else {
-                                bgClass = 'bg-sage-50/50 border-sage-200 hover:border-sage-500';
-                                badgeHTML = `<span class="w-2 h-2 rounded-full bg-sage-600"></span>`;
-                            }
-
-                            const totalMins = sessions.reduce((acc, s) => {
-                                if (s.modalidad === 'descanso') return acc;
-                                return acc + (Number(s.min_reales) > 0 ? Number(s.min_reales) : Number(s.min_planificados || 0));
-                            }, 0);
-                            const anyCompleted = sessions.some(s => s.estado === 'completado');
-                            const statusIcon = anyCompleted ? '✓ ' : '';
-                            const prefix = primary.modalidad === 'grupal' ? 'Inf ' : (primary.modalidad === 'libre' ? 'Libre ' : '');
-                            footerHTML = `<span class="text-[10px] font-mono font-medium ${anyCompleted ? 'text-sage-800' : 'text-slate-500'} truncate block">${statusIcon}${prefix}${totalMins}m${extraTag}</span>`;
-                        }
-                    } else if (isSunday) {
-                        bgClass = 'bg-sand-50/70 border-slate-200/50 text-slate-500';
-                        footerHTML = `<span class="text-[10px] text-slate-400 hidden sm:block">Descanso</span>`;
-                    }
-
-                    cell.className = `calendar-day h-20 sm:h-24 p-2 rounded-xl border text-left flex flex-col justify-between relative ${bgClass} ${ringClass}`;
-                    cell.innerHTML = `
-                        <div class="flex items-center justify-between w-full">
-                            <span class="text-xs sm:text-sm font-semibold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-700'}">${d}</span>
-                            ${badgeHTML}
-                        </div>
-                        <div class="w-full space-y-0.5">
-                            ${hasBloqueo ? '<span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500" title="Zona de bloqueo"></span>' : ''}
-                            ${footerHTML}
-                        </div>
-                    `;
-                } else {
-                    // ============================================================
-                    // VISTA MULTI-SESIÓN (Píldoras apiladas con código de idioma)
-                    // ============================================================
-                    let bgClass = 'bg-white border-slate-200/80 hover:border-sage-400';
-                    let linesHTML = '';
-
-                    if (sessions.length > 0) {
-                        const hasRecovery = sessions.some(s => s.modalidad === 'solitario' && (Number(s.fatiga) >= 7 || s.modo_recuperacion_activo));
-                        const hasGrupal = sessions.some(s => s.modalidad === 'grupal');
-                        const hasLibre = sessions.some(s => s.modalidad === 'libre');
-                        const allDescanso = sessions.every(s => s.modalidad === 'descanso' || s.estado === 'descanso');
-
-                        if (allDescanso) {
-                            bgClass = 'bg-sand-100/80 border-slate-200 text-slate-600';
-                        } else if (hasRecovery) {
-                            bgClass = 'bg-amber-50/60 border-amber-200 hover:border-amber-400';
-                        } else if (hasLibre && sessions.length === 1) {
-                            bgClass = 'bg-purple-50/60 border-purple-200 hover:border-purple-400';
-                        } else if (hasGrupal && sessions.length === 1) {
-                            bgClass = 'bg-indigo-50/60 border-indigo-200 hover:border-indigo-400';
-                        } else {
-                            bgClass = 'bg-sage-50/50 border-sage-200 hover:border-sage-500';
-                        }
-
-                        linesHTML = sessions.slice(0, 3).map(s => {
-                            const lang = s.idioma || 'ES';
-                            const check = s.estado === 'completado' ? '✓' : '';
-                            if (s.modalidad === 'descanso' || s.estado === 'descanso') {
-                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-white/80 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200/80 truncate">
-                                    <span class="font-mono font-bold text-slate-500">${lang}</span>
-                                    <span class="truncate ml-1">Descanso</span>
-                                </div>`;
-                            } else if (s.modalidad === 'libre') {
-                                const mins = Number(s.min_reales || 0);
-                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-purple-100/90 text-purple-900 px-1.5 py-0.5 rounded truncate">
-                                    <span class="font-mono font-bold">${lang}</span>
-                                    <span class="font-mono truncate ml-1">${check}Libre${mins > 0 ? ' ' + mins + 'm' : ''}</span>
-                                </div>`;
-                            } else if (s.modalidad === 'grupal') {
-                                const mins = s.min_reales || s.min_planificados || 120;
-                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] bg-indigo-100/80 text-indigo-900 px-1.5 py-0.5 rounded truncate">
-                                    <span class="font-mono font-bold">${lang}</span>
-                                    <span class="font-mono truncate ml-1">${check}Inf ${mins}m</span>
-                                </div>`;
-                            } else {
-                                const isRec = Number(s.fatiga) >= 7 || s.modo_recuperacion_activo;
-                                const mins = s.min_reales > 0 ? s.min_reales : (s.min_planificados || 0);
-                                const pillCls = isRec ? 'bg-amber-100/90 text-amber-900' : 'bg-sage-100/90 text-sage-900';
-                                return `<div class="flex items-center justify-between text-[9px] sm:text-[10px] ${pillCls} px-1.5 py-0.5 rounded truncate">
-                                    <span class="font-mono font-bold">${lang}</span>
-                                    <span class="font-mono truncate ml-1">${check}${mins}m</span>
-                                </div>`;
-                            }
-                        }).join('');
-
-                        if (sessions.length > 3) {
-                            linesHTML += `<div class="text-[9px] font-mono text-slate-500 text-right">+${sessions.length - 3} más</div>`;
-                        }
-                    } else if (isSunday) {
-                        bgClass = 'bg-sand-50/70 border-slate-200/50 text-slate-500';
-                        linesHTML = `<span class="text-[10px] text-slate-400 hidden sm:block">Descanso</span>`;
-                    }
-
-                    cell.className = `calendar-day h-24 sm:h-28 p-1.5 sm:p-2 rounded-xl border text-left flex flex-col justify-between relative overflow-hidden ${bgClass} ${ringClass}`;
-                    cell.innerHTML = `
-                        <div class="flex items-center justify-between w-full">
-                            <span class="text-xs font-semibold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-700'}">${d}</span>
-                            ${sessions.length > 1 ? `<span class="text-[9px] font-mono font-bold bg-slate-800 text-white px-1.5 rounded-full">${sessions.length}x</span>` : ''}
-                        </div>
-                        <div class="w-full space-y-0.5 overflow-hidden">
-                            ${linesHTML}
-                        </div>
-                    `;
-                }
-
+                cell.className = `calendar-day h-24 sm:h-28 p-1.5 sm:p-2 rounded-xl border text-left flex flex-col justify-between relative overflow-hidden ${bgClass} ${ringClass}`;
+                cell.innerHTML = `
+                    <div class="flex items-center justify-between w-full">
+                        <span class="text-xs font-semibold font-mono ${isToday ? 'bg-slate-900 text-white px-1.5 py-0.5 rounded-md' : 'text-slate-700'}">${d}</span>
+                        ${sessions.length > 1 ? `<span class="text-[9px] font-mono font-bold bg-slate-800 text-white px-1.5 rounded-full">${sessions.length}x</span>` : ''}
+                    </div>
+                    <div class="w-full space-y-0.5 overflow-hidden">
+                        ${linesHTML}
+                    </div>
+                `;
                 grid.appendChild(cell);
             }
         }
@@ -2210,6 +2287,7 @@
                 currentMonth = 11;
                 currentYear--;
             }
+            selectedDateStr = toISO(new Date(currentYear, currentMonth, 1));
             renderCalendar();
             updateDashboard();
         }
